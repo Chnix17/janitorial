@@ -1,38 +1,94 @@
 .App {
-  text-align: center;
+  text-align: left;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+:root {
+  --cc-bg: #f6fff9;
+  --cc-surface: #ffffff;
+  --cc-surface-2: #f0fdf4;
+  --cc-text: #0f172a;
+  --cc-muted: #475569;
+  --cc-border: rgba(15, 23, 42, 0.12);
+  --cc-shadow: 0 14px 40px rgba(15, 23, 42, 0.10);
+  --cc-shadow-sm: 0 10px 28px rgba(15, 23, 42, 0.08);
+
+  --cc-green-700: #15803d;
+  --cc-green-600: #16a34a;
+  --cc-green-500: #22c55e;
+  --cc-green-100: #dcfce7;
+  --cc-ring: rgba(34, 197, 94, 0.22);
+
+  --cc-radius: 16px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+html,
+body {
+  height: 100%;
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+body {
+  margin: 0;
+  color: var(--cc-text);
+  background: radial-gradient(1100px 700px at 15% 10%, rgba(34, 197, 94, 0.18), transparent 55%),
+    radial-gradient(900px 600px at 85% 0%, rgba(21, 128, 61, 0.12), transparent 55%),
+    var(--cc-bg);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+    "Segoe UI Emoji";
 }
 
-.App-link {
-  color: #61dafb;
+* {
+  box-sizing: border-box;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.cc-card {
+  background: var(--cc-surface);
+  border: 1px solid var(--cc-border);
+  border-radius: var(--cc-radius);
+  box-shadow: var(--cc-shadow-sm);
+}
+
+.cc-card-pad {
+  padding: 18px;
+}
+
+.cc-btn {
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cc-btn-primary {
+  background: linear-gradient(180deg, var(--cc-green-600), var(--cc-green-700));
+  color: #ffffff;
+}
+
+.cc-btn-primary:hover:not(:disabled) {
+  filter: brightness(0.98);
+}
+
+.cc-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cc-btn-ghost {
+  background: var(--cc-surface-2);
+  color: var(--cc-green-700);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.cc-input {
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 12px;
+  padding: 11px 12px;
+  font-size: 14px;
+  outline: none;
+  background: #ffffff;
+}
+
+.cc-input:focus {
+  border-color: rgba(34, 197, 94, 0.65);
+  box-shadow: 0 0 0 4px var(--cc-ring);
 }

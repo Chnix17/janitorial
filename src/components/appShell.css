@@ -1,0 +1,140 @@
+
+.cc-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  background: transparent;
+  color: var(--cc-text);
+}
+
+.cc-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  background: linear-gradient(180deg, #ffffff, var(--cc-surface-2));
+  border-right: 1px solid var(--cc-border);
+  color: var(--cc-text);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 14px;
+  gap: 16px;
+}
+
+.cc-brand {
+  padding: 10px 10px 6px;
+  border-radius: 14px;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.18);
+}
+
+.cc-brand-title {
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: 0.2px;
+}
+
+.cc-brand-sub {
+  font-size: 12px;
+  color: var(--cc-muted);
+  margin-top: 2px;
+}
+
+.cc-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cc-nav-link {
+  color: var(--cc-text);
+  text-decoration: none;
+  padding: 10px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.cc-nav-link:hover {
+  background: rgba(34, 197, 94, 0.10);
+  border-color: rgba(34, 197, 94, 0.22);
+  transform: translateY(-1px);
+}
+
+.cc-nav-link-active {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.38);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+}
+
+.cc-user {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--cc-border);
+  padding-top: 14px;
+}
+
+.cc-user-name {
+  font-weight: 900;
+}
+
+.cc-user-role {
+  font-size: 12px;
+  color: var(--cc-muted);
+  text-transform: capitalize;
+}
+
+.cc-main {
+  padding: 26px;
+}
+
+.cc-btn-secondary {
+  background: rgba(34, 197, 94, 0.10);
+  color: var(--cc-green-700);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+}
+
+.cc-btn-secondary:hover {
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.cc-page-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 950;
+  letter-spacing: -0.2px;
+}
+
+.cc-page-subtitle {
+  margin-top: 8px;
+  color: var(--cc-muted);
+}
+
+@media (max-width: 900px) {
+  .cc-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .cc-sidebar {
+    position: relative;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .cc-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .cc-user {
+    margin-top: 0;
+    border-top: 0;
+    padding-top: 0;
+    margin-left: auto;
+    align-items: flex-end;
+  }
+}

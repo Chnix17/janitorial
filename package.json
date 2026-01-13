@@ -2,13 +2,18 @@
   "name": "janitorial",
   "version": "0.1.0",
   "private": true,
+  "proxy": "http://localhost/janitorial",
   "dependencies": {
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
     "@testing-library/user-event": "^13.5.0",
+    "antd": "^6.2.0",
+    "axios": "^1.13.2",
+    "crypto-js": "^4.2.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "react-router-dom": "^6.26.2",
     "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
   },
