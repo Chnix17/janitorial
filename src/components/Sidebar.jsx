@@ -102,7 +102,7 @@ export default function Sidebar({ title, homePath }) {
   );
 
   return (
-    <aside className="cc-sidebar cc-sidebar-v2">
+    <aside className="cc-sidebar cc-sidebar-v2 cc-sidebar-v3">
       <div className="cc-side-top">
         <div className="cc-side-brand">
           <span className="cc-side-logo" aria-hidden="true"><Icon.Check /></span>
@@ -117,12 +117,16 @@ export default function Sidebar({ title, homePath }) {
       </div>
 
       <nav className="cc-nav cc-nav-v2">
-        <NavItem to={homePath} icon={Icon.Dashboard} end>
-          Dashboard
-        </NavItem>
+        <div className="cc-nav-section">
+          <div className="cc-nav-section-title">Overview</div>
+          <NavItem to={homePath} icon={Icon.Dashboard} end>
+            Dashboard
+          </NavItem>
+        </div>
 
         {isAdmin ? (
-          <>
+          <div className="cc-nav-section">
+            <div className="cc-nav-section-title">Management</div>
             <NavItem to="/admin/users" icon={Icon.Users}>Users</NavItem>
 
             <div className="cc-nav-group">
@@ -153,13 +157,14 @@ export default function Sidebar({ title, homePath }) {
             <NavItem to="/admin/assignments" icon={Icon.Calendar}>Assignments</NavItem>
             <NavItem to="/admin/inspections" icon={Icon.Clipboard}>Inspections</NavItem>
             <NavItem to="/admin/activity" icon={Icon.Activity}>Activity</NavItem>
-          </>
+          </div>
         ) : (
-          <>
+          <div className="cc-nav-section">
+            <div className="cc-nav-section-title">Menu</div>
             <NavItem to="/student/assignments" icon={Icon.Calendar}>Assignments</NavItem>
             <NavItem to="/student/inspection" icon={Icon.Clipboard}>Inspections</NavItem>
             <NavItem to="/student/activity" icon={Icon.Activity}>Activity</NavItem>
-          </>
+          </div>
         )}
       </nav>
 

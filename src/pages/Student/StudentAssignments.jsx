@@ -18,6 +18,10 @@ export default function StudentAssignments() {
   const [loading, setLoading] = useState(false);
   const [assignment, setAssignment] = useState(null);
   const [rooms, setRooms] = useState([]);
+  const [missedLoading, setMissedLoading] = useState(false);
+  const [missedGroups, setMissedGroups] = useState([]);
+  const [missedModalOpen, setMissedModalOpen] = useState(false);
+  const [missedSelected, setMissedSelected] = useState(null);
 
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [checklistLoading, setChecklistLoading] = useState(false);
@@ -34,10 +38,101 @@ export default function StudentAssignments() {
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [user]);
 
+  const ymd = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const addDays = (date, n) => {
+    const d = new Date(date);
+    d.setDate(d.getDate() + n);
+    return d;
+  };
+
+  const pastDates = useMemo(() => {
+    const base = new Date();
+    const daysBack = [1, 2, 3];
+    return daysBack.map((n) => ymd(addDays(base, -n)));
+  }, []);
+
+  const loadMissedRooms = async (a) => {
+    if (!assignedUserId) {
+      setMissedGroups([]);
+      return;
+    }
+
+    const assignedFloorBuildingId = Number(a?.assigned_floor_building_id);
+    if (!assignedFloorBuildingId) {
+      setMissedGroups([]);
+      return;
+    }
+
+    const assignedStart = String(a?.assigned_start_date || '').trim();
+    const assignedEnd = String(a?.assigned_end_date || '').trim();
+
+    const yesterday = ymd(addDays(new Date(), -1));
+    const endLimit = assignedEnd && assignedEnd < yesterday ? assignedEnd : yesterday;
+
+    const datesToFetch = pastDates
+      .filter((d) => !assignedStart || String(d) >= assignedStart)
+      .filter((d) => !assignedEnd || String(d) <= endLimit);
+
+    if (datesToFetch.length === 0) {
+      setMissedGroups([]);
+      return;
+    }
+
+    setMissedLoading(true);
+    try {
+      const results = await Promise.all(
+        datesToFetch.map(async (date) => {
+          const res = await axios.post(
+            `${baseUrl}student.php`,
+            {
+              operation: 'getMissedClassrooms',
+              json: {
+                assigned_user_id: Number(assignedUserId),
+                assigned_floor_building_id: assignedFloorBuildingId,
+                date
+              }
+            },
+            { headers: { 'Content-Type': 'application/json' } }
+          );
+
+          if (!res?.data?.success) {
+            return { date, rooms: [], error: res?.data?.message || 'Failed to load missed tasks.' };
+          }
+
+          return { date, rooms: Array.isArray(res.data.data) ? res.data.data : [], error: null };
+        })
+      );
+
+      const anyError = results.find((x) => !!x.error);
+      if (anyError) {
+        toast.error(anyError.error);
+      }
+
+      setMissedGroups(
+        results
+          .map((r) => ({ date: r.date, rooms: r.rooms }))
+          .filter((g) => Array.isArray(g.rooms) && g.rooms.length > 0)
+          .sort((a2, b2) => String(b2.date).localeCompare(String(a2.date)))
+      );
+    } catch (e) {
+      setMissedGroups([]);
+      toast.error('Network error. Please try again.');
+    } finally {
+      setMissedLoading(false);
+    }
+  };
+
   const loadAssignmentAndRooms = async () => {
     if (!assignedUserId) {
       setAssignment(null);
       setRooms([]);
+      setMissedGroups([]);
       return;
     }
 
@@ -61,6 +156,7 @@ export default function StudentAssignments() {
 
       if (!a?.assigned_floor_building_id) {
         setRooms([]);
+        setMissedGroups([]);
         return;
       }
 
@@ -76,9 +172,12 @@ export default function StudentAssignments() {
         setRooms([]);
         toast.error(roomsRes?.data?.message || 'Failed to load rooms.');
       }
+
+      await loadMissedRooms(a);
     } catch (e) {
       setAssignment(null);
       setRooms([]);
+      setMissedGroups([]);
       toast.error('Network error. Please try again.');
     } finally {
       setLoading(false);
@@ -201,10 +300,55 @@ export default function StudentAssignments() {
     return 'Not recorded';
   };
 
+  const getMissedChecklistLabel = (value) => {
+    if (value === null || typeof value === 'undefined') return 'Pending';
+    if (Number(value) === 1) return 'OK';
+    if (Number(value) === 0) return 'No Action';
+    return 'Pending';
+  };
+
   const todayLabel = useMemo(() => {
     const d = new Date();
     return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   }, []);
+
+  const fmtDate = (val) => {
+    if (!val) return '';
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return String(val);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const missedItems = useMemo(() => {
+    const items = [];
+    for (const g of missedGroups || []) {
+      const date = g?.date;
+      const roomsForDate = Array.isArray(g?.rooms) ? g.rooms : [];
+      for (const r of roomsForDate) {
+        items.push({
+          key: `${date}:${r?.room_id}`,
+          date,
+          room: r
+        });
+      }
+    }
+    items.sort((a, b) => {
+      const d = String(b.date).localeCompare(String(a.date));
+      if (d !== 0) return d;
+      return String(a?.room?.room_number || '').localeCompare(String(b?.room?.room_number || ''));
+    });
+    return items;
+  }, [missedGroups]);
+
+  const openMissedModal = (item) => {
+    setMissedSelected(item);
+    setMissedModalOpen(true);
+  };
+
+  const closeMissedModal = () => {
+    setMissedModalOpen(false);
+    setMissedSelected(null);
+  };
 
   return (
     <div className="p-6">
@@ -256,6 +400,98 @@ export default function StudentAssignments() {
         )}
       </div>
 
+      <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50/40 p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-extrabold text-slate-900">Missed Tasks</div>
+            <div className="mt-1 text-xs text-slate-600">Rooms you missed from the past 3 days (excluding today).</div>
+          </div>
+          {missedGroups.length > 0 ? (
+            <div className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">{missedGroups.reduce((sum, g) => sum + (g.rooms?.length || 0), 0)} missed</div>
+          ) : null}
+        </div>
+
+        <div className="mt-4">
+          {loading || missedLoading ? (
+            <div className="text-sm text-slate-600">Loading missed tasks...</div>
+          ) : missedItems.length === 0 ? (
+            <div className="text-sm text-slate-600">No missed tasks in the past 3 days.</div>
+          ) : (
+            <div className="grid gap-2">
+              {missedItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => openMissedModal(item)}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-rose-200 bg-white px-4 py-3 text-left hover:bg-rose-50"
+                >
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">{fmtDate(item.date)} • Room {item?.room?.room_number}</div>
+                    <div className="mt-1 text-xs text-slate-500">{item?.room?.building_name} • {item?.room?.floor_name}</div>
+                  </div>
+                  <div className="text-xs font-semibold text-rose-700">View</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {missedModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeMissedModal();
+          }}
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
+            <div className="border-b border-slate-200 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-base font-extrabold text-slate-900">Missed Room {missedSelected?.room?.room_number}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {fmtDate(missedSelected?.date)} • {missedSelected?.room?.building_name} • {missedSelected?.room?.floor_name}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeMissedModal}
+                  className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto p-5">
+              {Array.isArray(missedSelected?.room?.checklist) && missedSelected.room.checklist.length > 0 ? (
+                <div className="grid gap-2">
+                  {missedSelected.room.checklist.map((c) => {
+                    const v = c.operation_is_functional;
+                    const label = getMissedChecklistLabel(v);
+                    const cls =
+                      label === 'OK'
+                        ? 'text-emerald-600'
+                        : label === 'No Action'
+                          ? 'text-slate-600'
+                          : 'text-slate-500';
+                    return (
+                      <div key={c.checklist_id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm">
+                        <div className="text-slate-800">{c.checklist_name}</div>
+                        <div className={`font-semibold ${cls}`}>{label}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-sm text-slate-600">No checklist items found.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {isChecklistOpen ? (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4"
@@ -291,9 +527,9 @@ export default function StudentAssignments() {
                   <div className="grid gap-4">
                     {checklist.map((item) => {
                       const cid = Number(item.checklist_id);
-                      const v = selectedByChecklistId[cid] ?? null;
-                      const isOk = Number(v) === 1;
-                      const isNotOk = Number(v) === 0;
+                      const v = Object.prototype.hasOwnProperty.call(selectedByChecklistId, cid) ? selectedByChecklistId[cid] : null;
+                      const isOk = v === 1 || v === '1';
+                      const isNotOk = v === 0 || v === '0';
 
                       return (
                         <div key={cid} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
