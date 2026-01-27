@@ -1,6 +1,7 @@
 import './App.css';
 
 import React, { useEffect } from 'react';
+import { message } from 'antd';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import Login from './pages/Login';
@@ -9,6 +10,16 @@ import StudentDashboard from './pages/Student/StudentDashboard';
 import ProtectedRoute from './utils/ProtectedRoute';
 import NotFound from './components/NotFound';
 import UsersManagement from './pages/Admin/UsersManagement';
+import RoomsBuildingsManagement from './pages/Admin/RoomsBuildingsManagement';
+import AdminBuildings from './pages/Admin/AdminBuildings';
+import AdminRooms from './pages/Admin/AdminRooms';
+import AdminFloors from './pages/Admin/AdminFloors';
+import AdminFloorNames from './pages/Admin/AdminFloorNames';
+import AdminAssignments from './pages/Admin/AdminAssignments';
+import AdminRoomChecklists from './pages/Admin/AdminRoomChecklists';
+import AdminActivity from './pages/Admin/AdminActivity';
+import StudentAssignments from './pages/Student/StudentAssignments';
+import Activity from './pages/Student/Activity';
 import { getApiBaseUrl } from './utils/apiConfig';
 import { SecureStorage } from './utils/encryption';
 import AppShell from './components/AppShell';
@@ -25,6 +36,11 @@ function App() {
 
   useEffect(() => {
     initializeApiUrl();
+    message.config({
+      top: 16,
+      duration: 3,
+      maxCount: 3
+    });
   }, []);
 
   return (
@@ -44,6 +60,14 @@ function App() {
           >
             <Route index element={<AdminDashboard />} />
             <Route path="users" element={<UsersManagement />} />
+            <Route path="buildings" element={<AdminBuildings />} />
+            <Route path="rooms" element={<AdminRooms />} />
+            <Route path="checklists" element={<AdminRoomChecklists />} />
+            <Route path="floors" element={<AdminFloors />} />
+            <Route path="floor-names" element={<AdminFloorNames />} />
+            <Route path="assignments" element={<AdminAssignments />} />
+            <Route path="inspections" element={<div>Inspections (coming soon)</div>} />
+            <Route path="activity" element={<AdminActivity />} />
           </Route>
 
           <Route
@@ -55,6 +79,7 @@ function App() {
             )}
           >
             <Route path="Dashboard" element={<StudentDashboard />} />
+            <Route path="Activity" element={<Activity />} />
           </Route>
 
           {/* Lowercase aliases to support navigation/link variations */}
@@ -68,6 +93,14 @@ function App() {
           >
             <Route index element={<AdminDashboard />} />
             <Route path="users" element={<UsersManagement />} />
+            <Route path="buildings" element={<AdminBuildings />} />
+            <Route path="rooms" element={<AdminRooms />} />
+            <Route path="checklists" element={<AdminRoomChecklists />} />
+            <Route path="floors" element={<AdminFloors />} />
+            <Route path="floor-names" element={<AdminFloorNames />} />
+            <Route path="assignments" element={<AdminAssignments />} />
+            <Route path="inspections" element={<div>Inspections (coming soon)</div>} />
+            <Route path="activity" element={<AdminActivity />} />
           </Route>
 
           <Route
@@ -79,6 +112,9 @@ function App() {
             )}
           >
             <Route path="dashboard" element={<StudentDashboard />} />
+            <Route path="assignments" element={<StudentAssignments />} />
+            <Route path="inspection" element={<StudentAssignments />} />
+            <Route path="activity" element={<Activity />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />

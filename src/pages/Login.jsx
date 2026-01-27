@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../auth/AuthContext';
 import { SecureStorage } from '../utils/encryption';
 import { getApiBaseUrl } from '../utils/apiConfig';
+import { toast } from '../utils/toast';
 import './login.css';
 
 export default function Login() {
@@ -14,7 +15,6 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
 
   const [captchaA, setCaptchaA] = useState(0);
   const [captchaB, setCaptchaB] = useState(0);
@@ -81,13 +81,12 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
 
     const captchaAnswer = captchaA + captchaB;
     const numericInput = parseInt(captchaInput, 10);
     if (Number.isNaN(numericInput) || numericInput !== captchaAnswer) {
       setCaptchaError(true);
-      setError('Invalid CAPTCHA. Please solve the math problem correctly.');
+      toast.error('Invalid CAPTCHA. Please solve the math problem correctly.');
       generateCaptcha();
       return;
     }
@@ -99,7 +98,7 @@ export default function Login() {
 
     try {
       if (!username || !password) {
-        setError('Please fill in all fields.');
+        toast.error('Please fill in all fields.');
         generateCaptcha();
         return;
       }
@@ -135,9 +134,7 @@ export default function Login() {
           return roleMap[userData?.role_id] || '';
         })();
         const role = roleName.toString().toLowerCase();
-
-        // clear any residual error text (e.g., from prior attempts)
-        setError('');
+        toast.success('Login successful.');
 
         if (role.includes('admin')) {
           navigate('/admin');
@@ -147,7 +144,7 @@ export default function Login() {
           navigate('/login');
         }
       } else {
-        setError(res?.message || 'Login failed');
+        toast.error(res?.message || 'Login failed');
         generateCaptcha();
       }
     } catch (err) {
@@ -155,11 +152,11 @@ export default function Login() {
 
       if (err?.response) {
         const errorMessage = err.response.data?.message || 'Invalid credentials';
-        setError(errorMessage);
+        toast.error(errorMessage);
       } else if (err?.request) {
-        setError('Network error. Please check your connection.');
+        toast.error('Network error. Please check your connection.');
       } else {
-        setError('An unexpected error occurred');
+        toast.error('An unexpected error occurred');
       }
       generateCaptcha();
     } finally {
@@ -212,8 +209,6 @@ export default function Login() {
               autoComplete="off"
             />
           </label>
-
-          {error ? <div className="cc-error">{error}</div> : null}
 
           <button
             className="cc-btn cc-btn-primary"

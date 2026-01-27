@@ -6,6 +6,9 @@ import AppShell from './components/AppShell';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import StudentDashboard from './pages/StudentDashboard';
+import AdminAssignments from './pages/Admin/AdminAssignments';
+import StudentAssignments from './pages/Student/StudentAssignments';
+import Activity from './pages/Student/Activity';
 
 const roleHomePath = (role) => {
   if (role === 'admin') return '/admin';
@@ -32,7 +35,7 @@ export default function AppRoutes() {
         <Route element={<AppShell title="Administrator" homePath="/admin" />}>
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/users" element={<div>Users (coming soon)</div>} />
-          <Route path="/admin/assignments" element={<div>Assignments (coming soon)</div>} />
+          <Route path="/admin/assignments" element={<AdminAssignments />} />
           <Route path="/admin/reports" element={<div>Reports (coming soon)</div>} />
         </Route>
       </Route>
@@ -40,9 +43,9 @@ export default function AppRoutes() {
       <Route element={<RequireAuth allowedRoles={['student']} />}>
         <Route element={<AppShell title="Student" homePath="/student" />}>
           <Route path="/student" element={<StudentDashboard />} />
-          <Route path="/student/assignments" element={<div>My Assignments (coming soon)</div>} />
+          <Route path="/student/assignments" element={<StudentAssignments />} />
           <Route path="/student/inspection" element={<div>Submit Inspection (coming soon)</div>} />
-          <Route path="/student/activity" element={<div>My Activity (coming soon)</div>} />
+          <Route path="/student/activity" element={<Activity />} />
         </Route>
       </Route>
 

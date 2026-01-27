@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { SecureStorage } from '../../utils/encryption';
 import { getApiBaseUrl } from '../../utils/apiConfig';
+import { toast } from '../../utils/toast';
 
 const withSlash = (base) => (base.endsWith('/') ? base : base + '/');
 
@@ -9,8 +10,11 @@ export default function UsersManagement() {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [query, setQuery] = useState('');
+  const [menuFor, setMenuFor] = useState(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 5;
 
   const [openForm, setOpenForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -34,13 +38,25 @@ export default function UsersManagement() {
   }, [roles]);
 
   const visibleUsers = useMemo(() => {
-    if (showArchived) return users;
-    return users.filter((u) => String(u.is_active) === '1' || u.is_active === 1);
-  }, [users, showArchived]);
+    const base = showArchived
+      ? users
+      : users.filter((u) => String(u.is_active) === '1' || u.is_active === 1);
+    const q = query.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter((u) =>
+      String(u.full_name || '').toLowerCase().includes(q) ||
+      String(u.username || '').toLowerCase().includes(q)
+    );
+  }, [users, showArchived, query]);
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(visibleUsers.length / pageSize)), [visibleUsers.length]);
+  const pagedUsers = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return visibleUsers.slice(start, start + pageSize);
+  }, [visibleUsers, page]);
 
   const loadAll = async () => {
     setLoading(true);
-    setError('');
     try {
       const [rolesRes, usersRes] = await Promise.all([
         axios.post(`${baseUrl}admin.php`, { operation: 'getRoles', json: {} }, { headers: { 'Content-Type': 'application/json' } }),
@@ -57,14 +73,40 @@ export default function UsersManagement() {
         setUsers(Array.isArray(usersRes.data.data) ? usersRes.data.data : []);
       } else {
         setUsers([]);
-        setError(usersRes?.data?.message || 'Failed to load users.');
+        toast.error(usersRes?.data?.message || 'Failed to load users.');
       }
     } catch (e) {
-      setError('Network error. Please try again.');
+      toast.error('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  const initials = (name = '') => {
+    const parts = String(name).trim().split(/\s+/).slice(0, 2);
+    return parts.map(p => p[0] ? p[0].toUpperCase() : '').join('');
+  };
+
+  const fmtDate = (val) => {
+    if (!val) return '';
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return String(val);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  useEffect(() => {
+    const onDocClick = (e) => {
+      // Close any open row menu if clicking outside
+      if (!e.target.closest?.('[data-row-menu]')) setMenuFor(null);
+    };
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, []);
+
+  useEffect(() => {
+    // Reset to first page when filters or dataset change
+    setPage(1);
+  }, [query, showArchived, users]);
 
   useEffect(() => {
     loadAll();
@@ -94,7 +136,6 @@ export default function UsersManagement() {
 
   const submitForm = async (e) => {
     e.preventDefault();
-    setError('');
 
     const payload = {
       full_name: String(form.full_name || '').trim(),
@@ -105,17 +146,17 @@ export default function UsersManagement() {
     };
 
     if (!payload.full_name || !payload.username) {
-      setError('Please fill in full name and username.');
+      toast.error('Please fill in full name and username.');
       return;
     }
 
     if (!payload.role_id) {
-      setError('Please select a user level.');
+      toast.error('Please select a user level.');
       return;
     }
 
     if (!editingUser && !payload.password) {
-      setError('Password is required when creating a user.');
+      toast.error('Password is required when creating a user.');
       return;
     }
 
@@ -135,19 +176,19 @@ export default function UsersManagement() {
       if (res?.data?.success) {
         setOpenForm(false);
         resetForm();
+        toast.success(editingUser ? 'User updated.' : 'User created.');
         await loadAll();
       } else {
-        setError(res?.data?.message || 'Save failed.');
+        toast.error(res?.data?.message || 'Save failed.');
       }
     } catch (e) {
-      setError('Network error. Please try again.');
+      toast.error('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const toggleArchive = async (user) => {
-    setError('');
     setLoading(true);
     try {
       const currentActive = String(user.is_active) === '1' || user.is_active === 1;
@@ -158,27 +199,50 @@ export default function UsersManagement() {
       );
 
       if (res?.data?.success) {
+        toast.success(currentActive ? 'User deactivated.' : 'User activated.');
         await loadAll();
       } else {
-        setError(res?.data?.message || 'Update failed.');
+        toast.error(res?.data?.message || 'Update failed.');
       }
     } catch (e) {
-      setError('Network error. Please try again.');
+      toast.error('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+    <div className="p-6">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 style={{ margin: 0 }}>Users Management</h1>
-          <div style={{ marginTop: 6, color: '#475569' }}>Create, update, and archive user accounts.</div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">User Management</h1>
+          <p className="mt-1 text-sm text-slate-500">Create and manage student and admin accounts</p>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#0f172a' }}>
+        <button
+          type="button"
+          onClick={openCreate}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+        >
+          <span className="text-lg leading-none">+</span>
+          Add User
+        </button>
+      </div>
+
+      <div className="mt-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full max-w-sm">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search users..."
+              className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-slate-800">
             <input
               type="checkbox"
               checked={showArchived}
@@ -186,118 +250,115 @@ export default function UsersManagement() {
             />
             Show archived
           </label>
-
-          <button
-            type="button"
-            className="cc-btn"
-            style={{ background: '#0ea5e9', color: '#fff' }}
-            onClick={openCreate}
-            disabled={loading}
-          >
-            Create User
-          </button>
-        </div>
-      </div>
-
-      {error ? (
-        <div style={{ marginTop: 12, background: '#fee2e2', border: '1px solid #fecaca', color: '#7f1d1d', padding: 10, borderRadius: 12 }}>
-          {error}
-        </div>
-      ) : null}
-
-      <div style={{ marginTop: 14, background: '#fff', borderRadius: 14, padding: 14, boxShadow: '0 10px 28px rgba(15,23,42,.08)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ fontWeight: 800 }}>Users</div>
-          <div style={{ color: '#475569' }}>{loading ? 'Loading…' : `${visibleUsers.length} record(s)`}</div>
         </div>
 
-        <div style={{ marginTop: 10, overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
-            <thead>
-              <tr style={{ textAlign: 'left', color: '#475569' }}>
-                <th style={{ padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>ID</th>
-                <th style={{ padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Full Name</th>
-                <th style={{ padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Username</th>
-                <th style={{ padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>User Level</th>
-                <th style={{ padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Status</th>
-                <th style={{ padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }}>Created</th>
-                <th style={{ padding: '10px 8px', borderBottom: '1px solid #e2e8f0' }} />
-              </tr>
-            </thead>
-            <tbody>
-              {visibleUsers.map((u) => {
-                const active = String(u.is_active) === '1' || u.is_active === 1;
-                const roleName = roleNameById.get(String(u.role_id)) || `Role #${u.role_id}`;
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+          <div className="grid grid-cols-[1.6fr_0.9fr_0.9fr_0.9fr_56px] gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-500">
+            <div>Name</div>
+            <div>Role</div>
+            <div>Status</div>
+            <div>Created</div>
+            <div />
+          </div>
 
-                return (
-                  <tr key={u.user_id}>
-                    <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>{u.user_id}</td>
-                    <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9', fontWeight: 700 }}>{u.full_name}</td>
-                    <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>{u.username}</td>
-                    <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>{roleName}</td>
-                    <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '3px 10px',
-                        borderRadius: 999,
-                        fontSize: 12,
-                        fontWeight: 800,
-                        background: active ? '#dcfce7' : '#e2e8f0',
-                        color: active ? '#14532d' : '#334155'
-                      }}>
-                        {active ? 'Active' : 'Archived'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9', color: '#475569' }}>{u.created_at || ''}</td>
-                    <td style={{ padding: '10px 8px', borderBottom: '1px solid #f1f5f9' }}>
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <div>
+            {pagedUsers.map((u, idx) => {
+              const active = String(u.is_active) === '1' || u.is_active === 1;
+              const roleName = roleNameById.get(String(u.role_id)) || `Role #${u.role_id}`;
+              return (
+                <div key={u.user_id} className="grid grid-cols-[1.6fr_0.9fr_0.9fr_0.9fr_56px] items-center gap-2 border-b border-slate-100 px-5 py-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="grid h-9 w-9 place-items-center rounded-full bg-emerald-50 font-extrabold text-emerald-700">{initials(u.full_name)}</div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-slate-900">{u.full_name}</div>
+                      <div className="text-xs text-slate-500">@{u.username}</div>
+                    </div>
+                  </div>
+
+                  <div className="text-sm text-slate-800">{roleName}</div>
+
+                  <div>
+                    <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-extrabold ${active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-emerald-600' : 'bg-slate-500'}`}></span>
+                      {active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  <div className="text-sm text-slate-700">{fmtDate(u.created_at)}</div>
+
+                  <div className="relative flex justify-end" data-row-menu>
+                    <button
+                      type="button"
+                      className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuFor(menuFor === u.user_id ? null : u.user_id);
+                      }}
+                      disabled={loading}
+                      aria-label="Row actions"
+                      title="Row actions"
+                    >
+                      ...
+                    </button>
+
+                    {menuFor === u.user_id ? (
+                      <div className="absolute right-0 top-8 z-50 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
                         <button
                           type="button"
-                          className="cc-btn"
-                          style={{ background: '#e2e8f0', color: '#0f172a' }}
-                          onClick={() => openEdit(u)}
-                          disabled={loading}
+                          className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                          onClick={() => { setMenuFor(null); openEdit(u); }}
                         >
                           Edit
                         </button>
                         <button
                           type="button"
-                          className="cc-btn"
-                          style={{ background: active ? '#fee2e2' : '#dcfce7', color: active ? '#7f1d1d' : '#14532d' }}
-                          onClick={() => toggleArchive(u)}
-                          disabled={loading}
+                          className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                          onClick={() => { setMenuFor(null); toggleArchive(u); }}
                         >
-                          {active ? 'Archive' : 'Restore'}
+                          {active ? 'Deactivate' : 'Activate'}
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
 
-              {visibleUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ padding: 14, color: '#475569' }}>
-                    No users found.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+            {visibleUsers.length === 0 ? (
+              <div className="px-5 py-6 text-sm text-slate-500">No users found.</div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between">
+          <div className="text-xs text-slate-500">
+            Showing {visibleUsers.length === 0 ? 0 : (page - 1) * pageSize + 1}–{Math.min(page * pageSize, visibleUsers.length)} of {visibleUsers.length}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+            >
+              Prev
+            </button>
+            <div className="min-w-[60px] text-center text-sm font-semibold text-slate-700">Page {page} of {totalPages}</div>
+            <button
+              type="button"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 
       {openForm ? (
         <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(2,6,23,.55)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 16,
-            zIndex: 50
-          }}
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               setOpenForm(false);
@@ -305,59 +366,55 @@ export default function UsersManagement() {
             }
           }}
         >
-          <div style={{ width: 'min(720px, 100%)', background: '#fff', borderRadius: 14, padding: 16, boxShadow: '0 20px 50px rgba(15,23,42,.35)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontWeight: 900, fontSize: 16 }}>{editingUser ? 'Update User' : 'Create User'}</div>
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-base font-extrabold text-slate-900">{editingUser ? 'Update User' : 'Create User'}</div>
               <button
                 type="button"
-                className="cc-btn"
-                style={{ background: '#e2e8f0', color: '#0f172a' }}
-                onClick={() => {
-                  setOpenForm(false);
-                  resetForm();
-                }}
+                onClick={() => { setOpenForm(false); resetForm(); }}
+                className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100"
                 disabled={loading}
               >
-                Close
+                ✕
               </button>
             </div>
 
-            <form onSubmit={submitForm} style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <form onSubmit={submitForm} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
                 Full Name
                 <input
                   value={form.full_name}
                   onChange={(e) => setForm((p) => ({ ...p, full_name: e.target.value }))}
-                  style={{ padding: 10, borderRadius: 10, border: '1px solid #cbd5e1' }}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                 />
               </label>
 
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
                 Username
                 <input
                   value={form.username}
                   onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))}
-                  style={{ padding: 10, borderRadius: 10, border: '1px solid #cbd5e1' }}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                 />
               </label>
 
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
                 Password {editingUser ? '(leave blank to keep current)' : ''}
                 <input
                   type="password"
                   value={form.password}
                   onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-                  style={{ padding: 10, borderRadius: 10, border: '1px solid #cbd5e1' }}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                   autoComplete="new-password"
                 />
               </label>
 
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
                 User Level
                 <select
                   value={form.role_id}
                   onChange={(e) => setForm((p) => ({ ...p, role_id: e.target.value }))}
-                  style={{ padding: 10, borderRadius: 10, border: '1px solid #cbd5e1', background: '#fff' }}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                 >
                   <option value="">Select level…</option>
                   {roles.map((r) => (
@@ -366,7 +423,7 @@ export default function UsersManagement() {
                 </select>
               </label>
 
-              <label style={{ display: 'flex', gap: 10, alignItems: 'center', gridColumn: '1 / -1' }}>
+              <label className="col-span-full flex items-center gap-2 text-sm font-semibold text-slate-800">
                 <input
                   type="checkbox"
                   checked={!!form.is_active}
@@ -375,23 +432,18 @@ export default function UsersManagement() {
                 Active
               </label>
 
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', gridColumn: '1 / -1' }}>
+              <div className="col-span-full flex justify-end gap-2">
                 <button
                   type="button"
-                  className="cc-btn"
-                  style={{ background: '#e2e8f0', color: '#0f172a' }}
-                  onClick={() => {
-                    setOpenForm(false);
-                    resetForm();
-                  }}
+                  onClick={() => { setOpenForm(false); resetForm(); }}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   disabled={loading}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="cc-btn"
-                  style={{ background: '#0ea5e9', color: '#fff' }}
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                   disabled={loading}
                 >
                   {loading ? 'Saving…' : (editingUser ? 'Update' : 'Create')}
