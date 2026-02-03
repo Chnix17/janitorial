@@ -110,6 +110,73 @@
          }
      }
 
+     public function getAssignedStats($data) {
+         try {
+             $assigned_user_id = null;
+             if (is_array($data) && isset($data['assigned_user_id']) && $data['assigned_user_id'] !== '') {
+                 $assigned_user_id = (int)$data['assigned_user_id'];
+             }
+
+             if ($assigned_user_id) {
+                 $stmt = $this->conn->prepare('
+                     SELECT
+                         COUNT(*) AS total,
+                         SUM(CASE WHEN CURDATE() BETWEEN a.assigned_start_date AND a.assigned_end_date THEN 1 ELSE 0 END) AS active,
+                         SUM(CASE WHEN CURDATE() < a.assigned_start_date THEN 1 ELSE 0 END) AS upcoming,
+                         SUM(CASE WHEN CURDATE() > a.assigned_end_date THEN 1 ELSE 0 END) AS ended,
+                         COUNT(DISTINCT a.assigned_user_id) AS students,
+                         COUNT(DISTINCT bf.building_id) AS buildings
+                     FROM tblassigned a
+                     JOIN tblbuildingfloor bf ON bf.floorbuilding_id = a.assigned_floor_building_id
+                     WHERE a.assigned_user_id = ?
+                 ');
+                 $stmt->execute([$assigned_user_id]);
+             } else {
+                 $stmt = $this->conn->prepare('
+                     SELECT
+                         COUNT(*) AS total,
+                         SUM(CASE WHEN CURDATE() BETWEEN a.assigned_start_date AND a.assigned_end_date THEN 1 ELSE 0 END) AS active,
+                         SUM(CASE WHEN CURDATE() < a.assigned_start_date THEN 1 ELSE 0 END) AS upcoming,
+                         SUM(CASE WHEN CURDATE() > a.assigned_end_date THEN 1 ELSE 0 END) AS ended,
+                         COUNT(DISTINCT a.assigned_user_id) AS students,
+                         COUNT(DISTINCT bf.building_id) AS buildings
+                     FROM tblassigned a
+                     JOIN tblbuildingfloor bf ON bf.floorbuilding_id = a.assigned_floor_building_id
+                 ');
+                 $stmt->execute();
+             }
+
+             $row = $stmt->fetch(PDO::FETCH_ASSOC);
+             if (!$row) {
+                 $row = [
+                     'total' => 0,
+                     'active' => 0,
+                     'upcoming' => 0,
+                     'ended' => 0,
+                     'students' => 0,
+                     'buildings' => 0
+                 ];
+             }
+
+             return json_encode([
+                 'success' => true,
+                 'data' => [
+                     'total' => (int)($row['total'] ?? 0),
+                     'active' => (int)($row['active'] ?? 0),
+                     'upcoming' => (int)($row['upcoming'] ?? 0),
+                     'ended' => (int)($row['ended'] ?? 0),
+                     'students' => (int)($row['students'] ?? 0),
+                     'buildings' => (int)($row['buildings'] ?? 0)
+                 ]
+             ]);
+         } catch (PDOException $e) {
+             return json_encode([
+                 'success' => false,
+                 'message' => 'Database error: ' . $e->getMessage()
+             ]);
+         }
+     }
+
      public function createChecklist($data) {
          try {
              if (!is_array($data) || !isset($data['checklist_room_id'], $data['checklist_name'])) {
@@ -1424,9 +1491,24 @@
              $stmt->execute([$user_id]);
              $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+             $assignStmt = $this->conn->prepare('SELECT assigned_id, assigned_start_date, assigned_end_date FROM tblassigned WHERE assigned_user_id = ? ORDER BY assigned_created_at DESC');
+             $assignStmt->execute([$user_id]);
+             $rawAssignments = $assignStmt->fetchAll(PDO::FETCH_ASSOC);
+
+             $assignmentsById = [];
+             foreach ($rawAssignments as $a) {
+                 $aid = (int)($a['assigned_id'] ?? 0);
+                 if ($aid <= 0) continue;
+                 if (!isset($assignmentsById[$aid])) {
+                     $assignmentsById[$aid] = $a;
+                 }
+             }
+             $assignments = array_values($assignmentsById);
+
              return json_encode([
                  'success' => true,
-                 'data' => $history
+                 'data' => $history,
+                 'assignments' => $assignments
              ]);
          } catch (PDOException $e) {
              return json_encode([
@@ -1664,6 +1746,52 @@
              ]);
          }
      }
+
+     public function getRecentInspections($data) {
+         try {
+             $limit = 10;
+             if (is_array($data) && isset($data['limit']) && is_numeric($data['limit'])) {
+                 $limit = (int)$data['limit'];
+             }
+             if ($limit <= 0) $limit = 10;
+             if ($limit > 50) $limit = 50;
+
+             $stmt = $this->conn->prepare('
+                 SELECT
+                     s.assigned_status_id,
+                     s.assigned_status,
+                     s.completion_date,
+                     s.assigned_updated_at,
+                     u.user_id,
+                     u.full_name,
+                     r.room_id,
+                     r.room_number,
+                     b.building_name,
+                     f.floor_name
+                 FROM tblassignedstatus s
+                 JOIN tbluser u ON u.user_id = s.assigned_reported_by
+                 JOIN tblroom r ON r.room_id = s.room_id
+                 JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id
+                 JOIN tblbuilding b ON b.building_id = bf.building_id
+                 JOIN tblfloor f ON f.floor_id = bf.floor_id
+                 WHERE s.assigned_updated_at IS NOT NULL
+                 ORDER BY s.assigned_updated_at DESC
+                 LIMIT ' . $limit . '
+             ');
+             $stmt->execute();
+             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+             return json_encode([
+                 'success' => true,
+                 'data' => $rows
+             ]);
+         } catch (PDOException $e) {
+             return json_encode([
+                 'success' => false,
+                 'message' => 'Database error: ' . $e->getMessage()
+             ]);
+         }
+     }
  }
  
  $raw = file_get_contents('php://input');
@@ -1755,6 +1883,9 @@
      case 'getAssigned':
          echo $user->getAssigned($json);
          break;
+     case 'getAssignedStats':
+         echo $user->getAssignedStats($json);
+         break;
      case 'createAssigned':
          echo $user->createAssigned($json);
          break;
@@ -1774,16 +1905,22 @@
          echo $user->createChecklistBulk($json);
          break;
      case 'getStudentInspectionHistory':
-         echo $user->getStudentInspectionHistory($json);
-         break;
-     case 'getStudentActivitySummaryByDate':
-         echo $user->getStudentActivitySummaryByDate($json);
-         break;
-     case 'getStudentInspectionsByDate':
-         echo $user->getStudentInspectionsByDate($json);
-         break;
+        echo $user->getStudentInspectionHistory($json);
+        break;
+    case 'getInspectionHistory':
+        echo $user->getStudentInspectionHistory($json);
+        break;
+    case 'getStudentActivitySummaryByDate':
+        echo $user->getStudentActivitySummaryByDate($json);
+        break;
+    case 'getStudentInspectionsByDate':
+       echo $user->getStudentInspectionsByDate($json);
+        break;
+    case 'getRecentInspections':
+        echo $user->getRecentInspections($json);
+        break;
     default:
-        echo json_encode([
+       echo json_encode([
             'success' => false,
             'message' => 'Invalid operation'
         ]);

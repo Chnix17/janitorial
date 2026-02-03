@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { SecureStorage } from '../../utils/encryption';
 import { getApiBaseUrl } from '../../utils/apiConfig';
@@ -48,7 +48,7 @@ export default function AdminRooms() {
     });
   }, [rooms, search, buildingFilter]);
 
-  const loadFloorsByBuilding = async (building_id) => {
+  const loadFloorsByBuilding = useCallback(async (building_id) => {
     const bId = building_id === '' ? '' : Number(building_id);
     if (!bId) {
       setFloors([]);
@@ -71,9 +71,9 @@ export default function AdminRooms() {
       setFloors([]);
       toast.error('Network error. Please try again.');
     }
-  };
+  }, [baseUrl]);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [bRes, rRes] = await Promise.all([
@@ -99,16 +99,16 @@ export default function AdminRooms() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [baseUrl]);
 
   useEffect(() => {
     loadAll();
-  }, []);
+  }, [loadAll]);
 
   useEffect(() => {
     if (!openModal) return;
     loadFloorsByBuilding(form.building_id);
-  }, [openModal, form.building_id]);
+  }, [openModal, form.building_id, loadFloorsByBuilding]);
 
   useEffect(() => {
     if (!openMenuId) return;
@@ -281,7 +281,7 @@ export default function AdminRooms() {
     <div className="p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Rooms</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Rooms</h1>
           <p className="mt-1 text-sm text-slate-500">Manage classrooms and facilities</p>
         </div>
 
@@ -408,7 +408,7 @@ export default function AdminRooms() {
         >
           <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-base font-extrabold text-slate-900">{editing ? 'Edit Room' : 'Add Room'}</div>
+              <div className="text-base font-semibold text-slate-900">{editing ? 'Edit Room' : 'Add Room'}</div>
               <button type="button" onClick={closeModal} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100">
                 ✕
               </button>

@@ -71,6 +71,13 @@ body {
   cursor: not-allowed;
 }
 
+/* Small button variant */
+.cc-btn-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 10px;
+}
+
 .cc-btn-ghost {
   background: var(--cc-surface-2);
   color: var(--cc-green-700);
@@ -90,6 +97,120 @@ body {
   border-color: rgba(34, 197, 94, 0.65);
   box-shadow: 0 0 0 4px var(--cc-ring);
 }
+
+/* Inline input action (e.g., show/hide password) */
+.cc-input-group {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.cc-input-action {
+  border: 1px solid var(--cc-border);
+  background: #f8fafc;
+  color: var(--cc-muted);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cc-input-action:hover {
+  background: #eef2f7;
+}
+
+ .cc-label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cc-text);
+ }
+
+ .cc-login-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 26px;
+  background:
+    radial-gradient(1200px 600px at 20% 10%, rgba(34, 197, 94, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 90% 30%, rgba(16, 185, 129, 0.10), transparent 55%),
+    #ffffff;
+ }
+
+ .cc-login-card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border: 1px solid var(--cc-border);
+  border-radius: 22px;
+  box-shadow: var(--cc-shadow);
+  padding: 22px;
+  display: grid;
+  gap: 14px;
+ }
+
+ .cc-login-card-logo {
+  width: 120px;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
+  margin: 6px auto 0;
+ }
+
+ .cc-login-header {
+  text-align: center;
+ }
+
+ .cc-login-title {
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: -0.2px;
+ }
+
+ .cc-login-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--cc-muted);
+ }
+
+ /* Utility row for label + action (e.g., CAPTCHA + refresh) */
+ .cc-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+ }
+
+ .cc-login-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 6px;
+ }
+
+ .cc-login-note {
+  text-align: center;
+  font-size: 12px;
+  color: var(--cc-muted);
+  margin-top: 2px;
+ }
+
+ @media (max-width: 520px) {
+  .cc-login-wrap {
+    padding: 16px;
+  }
+
+  .cc-login-card {
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .cc-login-card-logo {
+    width: 96px;
+  }
+ }
 
 .student-assignment {
   display: grid;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { SecureStorage } from '../../utils/encryption';
 import { getApiBaseUrl } from '../../utils/apiConfig';
@@ -36,7 +36,7 @@ export default function AdminRoomChecklists() {
     return map;
   }, [floors]);
 
-  const loadBuildings = async () => {
+  const loadBuildings = useCallback(async () => {
     const res = await axios.post(
       `${baseUrl}admin.php`,
       { operation: 'getBuildings', json: {} },
@@ -48,9 +48,9 @@ export default function AdminRoomChecklists() {
       setBuildings([]);
       toast.error(res?.data?.message || 'Failed to load buildings.');
     }
-  };
+  }, [baseUrl]);
 
-  const loadFloorsByBuilding = async (bId) => {
+  const loadFloorsByBuilding = useCallback(async (bId) => {
     const id = bId === '' ? '' : Number(bId);
     if (!id) {
       setFloors([]);
@@ -69,9 +69,9 @@ export default function AdminRoomChecklists() {
       setFloors([]);
       toast.error(res?.data?.message || 'Failed to load floors.');
     }
-  };
+  }, [baseUrl]);
 
-  const loadRoomsByFloorBuilding = async (fbId) => {
+  const loadRoomsByFloorBuilding = useCallback(async (fbId) => {
     const id = fbId === '' ? '' : Number(fbId);
     if (!id) {
       setRooms([]);
@@ -90,9 +90,9 @@ export default function AdminRoomChecklists() {
       setRooms([]);
       toast.error(res?.data?.message || 'Failed to load rooms.');
     }
-  };
+  }, [baseUrl]);
 
-  const loadChecklists = async (rId) => {
+  const loadChecklists = useCallback(async (rId) => {
     const id = rId === '' ? '' : Number(rId);
     if (!id) {
       setChecklists([]);
@@ -111,9 +111,9 @@ export default function AdminRoomChecklists() {
       setChecklists([]);
       toast.error(res?.data?.message || 'Failed to load checklist.');
     }
-  };
+  }, [baseUrl]);
 
-  const loadInitial = async () => {
+  const loadInitial = useCallback(async () => {
     setLoading(true);
     try {
       await loadBuildings();
@@ -122,11 +122,11 @@ export default function AdminRoomChecklists() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadBuildings]);
 
   useEffect(() => {
     loadInitial();
-  }, []);
+  }, [loadInitial]);
 
   useEffect(() => {
     setFloorBuildingId('');
@@ -144,7 +144,7 @@ export default function AdminRoomChecklists() {
         setFloors([]);
       }
     })();
-  }, [building_id]);
+  }, [building_id, loadFloorsByBuilding]);
 
   useEffect(() => {
     setRoomId('');
@@ -160,7 +160,7 @@ export default function AdminRoomChecklists() {
         setRooms([]);
       }
     })();
-  }, [floorbuilding_id]);
+  }, [floorbuilding_id, loadRoomsByFloorBuilding]);
 
   useEffect(() => {
     setChecklists([]);
@@ -174,7 +174,7 @@ export default function AdminRoomChecklists() {
         setChecklists([]);
       }
     })();
-  }, [room_id]);
+  }, [room_id, loadChecklists]);
 
   useEffect(() => {
     if (!openMenuId) return;
@@ -337,7 +337,7 @@ export default function AdminRoomChecklists() {
     <div className="p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Room Checklists</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Room Checklists</h1>
           <p className="mt-1 text-sm text-slate-500">Create, update, delete, and bulk add checklist items per room.</p>
         </div>
 
@@ -423,7 +423,7 @@ export default function AdminRoomChecklists() {
               <div key={c.checklist_id} className="grid grid-cols-[1fr_56px] items-center gap-2 border-b border-slate-100 px-5 py-4">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-slate-900">{c.checklist_name}</div>
-                  <div className="text-xs text-slate-500">ID: {c.checklist_id}</div>
+                
                 </div>
 
                 <div
@@ -480,7 +480,7 @@ export default function AdminRoomChecklists() {
         >
           <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-base font-extrabold text-slate-900">{editing ? 'Edit Checklist' : 'Add Checklist (Bulk)'}</div>
+              <div className="text-base font-semibold text-slate-900">{editing ? 'Edit Checklist' : 'Add Checklist (Bulk)'}</div>
               <button type="button" onClick={closeModal} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100">
                 ✕
               </button>

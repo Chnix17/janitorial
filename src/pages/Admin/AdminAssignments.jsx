@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { SecureStorage } from '../../utils/encryption';
 import { getApiBaseUrl } from '../../utils/apiConfig';
@@ -11,7 +11,12 @@ export default function AdminAssignments() {
   const [buildings, setBuildings] = useState([]);
   const [floors, setFloors] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [stats, setStats] = useState({ total: 0, active: 0, upcoming: 0, ended: 0, students: 0, buildings: 0 });
   const [loading, setLoading] = useState(false);
+
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [buildingFilter, setBuildingFilter] = useState('all');
 
   const [openModal, setOpenModal] = useState(false);
 
@@ -49,7 +54,7 @@ export default function AdminAssignments() {
     resetForm();
   };
 
-  const loadFloorsByBuilding = async (building_id) => {
+  const loadFloorsByBuilding = useCallback(async (building_id) => {
     const bId = building_id === '' ? '' : Number(building_id);
     if (!bId) {
       setFloors([]);
@@ -72,15 +77,16 @@ export default function AdminAssignments() {
       setFloors([]);
       toast.error('Network error. Please try again.');
     }
-  };
+  }, [baseUrl]);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [studentsRes, buildingsRes, assignedRes] = await Promise.all([
+      const [studentsRes, buildingsRes, assignedRes, statsRes] = await Promise.all([
         axios.post(`${baseUrl}admin.php`, { operation: 'getStudents', json: {} }, { headers: { 'Content-Type': 'application/json' } }),
         axios.post(`${baseUrl}admin.php`, { operation: 'getBuildings', json: {} }, { headers: { 'Content-Type': 'application/json' } }),
-        axios.post(`${baseUrl}admin.php`, { operation: 'getAssigned', json: {} }, { headers: { 'Content-Type': 'application/json' } })
+        axios.post(`${baseUrl}admin.php`, { operation: 'getAssigned', json: {} }, { headers: { 'Content-Type': 'application/json' } }),
+        axios.post(`${baseUrl}admin.php`, { operation: 'getAssignedStats', json: {} }, { headers: { 'Content-Type': 'application/json' } })
       ]);
 
       if (studentsRes?.data?.success) {
@@ -103,21 +109,34 @@ export default function AdminAssignments() {
         setAssignments([]);
         toast.error(assignedRes?.data?.message || 'Failed to load assignments.');
       }
+
+      if (statsRes?.data?.success) {
+        setStats({
+          total: Number(statsRes?.data?.data?.total || 0),
+          active: Number(statsRes?.data?.data?.active || 0),
+          upcoming: Number(statsRes?.data?.data?.upcoming || 0),
+          ended: Number(statsRes?.data?.data?.ended || 0),
+          students: Number(statsRes?.data?.data?.students || 0),
+          buildings: Number(statsRes?.data?.data?.buildings || 0)
+        });
+      } else {
+        setStats({ total: 0, active: 0, upcoming: 0, ended: 0, students: 0, buildings: 0 });
+      }
     } catch (e) {
       toast.error('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [baseUrl]);
 
   useEffect(() => {
     loadAll();
-  }, []);
+  }, [loadAll]);
 
   useEffect(() => {
     if (!openModal) return;
     loadFloorsByBuilding(form.building_id);
-  }, [openModal, form.building_id]);
+  }, [openModal, form.building_id, loadFloorsByBuilding]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -196,11 +215,51 @@ export default function AdminAssignments() {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  const getStatus = (a) => {
+    const start = a?.assigned_start_date ? new Date(a.assigned_start_date) : null;
+    const end = a?.assigned_end_date ? new Date(a.assigned_end_date) : null;
+    const now = new Date();
+
+    if (!start || Number.isNaN(start.getTime()) || !end || Number.isNaN(end.getTime())) return 'Unknown';
+    if (now < start) return 'Upcoming';
+    if (now > end) return 'Ended';
+    return 'Active';
+  };
+
+  const filteredAssignments = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return assignments
+      .filter((a) => {
+        if (statusFilter === 'all') return true;
+        return getStatus(a).toLowerCase() === statusFilter;
+      })
+      .filter((a) => {
+        if (buildingFilter === 'all') return true;
+        return String(a?.building_name || '') === buildingFilter;
+      })
+      .filter((a) => {
+        if (!q) return true;
+        const student = String(a?.assigned_user_name || '').toLowerCase();
+        const building = String(a?.building_name || '').toLowerCase();
+        const floor = String(a?.floor_name || '').toLowerCase();
+        return student.includes(q) || building.includes(q) || floor.includes(q);
+      });
+  }, [assignments, buildingFilter, query, statusFilter]);
+
+  const buildingOptions = useMemo(() => {
+    const names = new Set();
+    for (const a of assignments) {
+      const n = String(a?.building_name || '').trim();
+      if (n) names.add(n);
+    }
+    return Array.from(names).sort((x, y) => x.localeCompare(y));
+  }, [assignments]);
+
   return (
     <div className="p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Assignments</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Assignments</h1>
           <p className="mt-1 text-sm text-slate-500">Assign students to floors by date</p>
         </div>
 
@@ -215,6 +274,82 @@ export default function AdminAssignments() {
         </button>
       </div>
 
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+          <div className="text-xs font-semibold text-slate-500">Total</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">{stats.total}</div>
+        </div>
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+          <div className="text-xs font-semibold text-emerald-700">Active</div>
+          <div className="mt-2 text-2xl font-semibold text-emerald-800">{stats.active}</div>
+        </div>
+        <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+          <div className="text-xs font-semibold text-sky-700">Upcoming</div>
+          <div className="mt-2 text-2xl font-semibold text-sky-800">{stats.upcoming}</div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+          <div className="text-xs font-semibold text-slate-600">Ended</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">{stats.ended}</div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+          <div className="text-xs font-semibold text-slate-500">Students</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">{stats.students}</div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+          <div className="text-xs font-semibold text-slate-500">Buildings</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">{stats.buildings}</div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)] md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-1 flex-col gap-3 md:flex-row md:items-center">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search student, building, floor…"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 md:max-w-sm"
+          />
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 md:max-w-[180px]"
+          >
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="ended">Ended</option>
+          </select>
+
+          <select
+            value={buildingFilter}
+            onChange={(e) => setBuildingFilter(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 md:max-w-[220px]"
+          >
+            <option value="all">All buildings</option>
+            {buildingOptions.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 md:justify-end">
+          <div className="text-sm text-slate-600">Showing <span className="font-semibold text-slate-900">{filteredAssignments.length}</span> of {assignments.length}</div>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery('');
+              setStatusFilter('all');
+              setBuildingFilter('all');
+            }}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            disabled={loading}
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
       {openModal ? (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4"
@@ -224,7 +359,7 @@ export default function AdminAssignments() {
         >
           <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-base font-extrabold text-slate-900">Add Assignment</div>
+              <div className="text-base font-semibold text-slate-900">Add Assignment</div>
               <button type="button" onClick={closeModal} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100">
                 ✕
               </button>
@@ -320,26 +455,54 @@ export default function AdminAssignments() {
         </div>
       ) : null}
 
-      <div className="mt-5 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-        <div className="grid grid-cols-[1fr_1fr_1fr_1fr] gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-500">
+      <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+        <div className="grid grid-cols-[1.2fr_1.3fr_1.1fr_.9fr] gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-500 md:grid-cols-[1.2fr_1.3fr_1.1fr_.9fr_1fr]">
           <div>Student</div>
-          <div>Building</div>
-          <div>Floor</div>
+          <div>Location</div>
           <div>Dates</div>
+          <div>Status</div>
+          <div className="hidden md:block">Created</div>
         </div>
 
         <div>
-          {assignments.map((a) => (
-            <div key={a.assigned_id} className="grid grid-cols-[1fr_1fr_1fr_1fr] items-center gap-2 border-b border-slate-100 px-5 py-4">
-              <div className="text-sm font-semibold text-slate-900">{a.assigned_user_name || ''}</div>
-              <div className="text-sm text-slate-600">{a.building_name || ''}</div>
-              <div className="text-sm text-slate-600">{a.floor_name || ''}</div>
-              <div className="text-sm text-slate-600">{fmtDate(a.assigned_start_date)} - {fmtDate(a.assigned_end_date)}</div>
-            </div>
-          ))}
+          {loading ? (
+            <div className="px-5 py-6 text-sm text-slate-500">Loading assignments…</div>
+          ) : null}
 
-          {!loading && assignments.length === 0 ? (
-            <div className="px-5 py-6 text-sm text-slate-500">No assignments found.</div>
+          {!loading ? (
+            filteredAssignments.map((a) => {
+              const status = getStatus(a);
+              const badgeClass =
+                status === 'Active'
+                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                  : status === 'Upcoming'
+                    ? 'bg-sky-50 text-sky-700 ring-sky-200'
+                    : status === 'Ended'
+                      ? 'bg-slate-100 text-slate-700 ring-slate-200'
+                      : 'bg-amber-50 text-amber-700 ring-amber-200';
+
+              return (
+                <div key={a.assigned_id} className="grid grid-cols-[1.2fr_1.3fr_1.1fr_.9fr] items-center gap-2 border-b border-slate-100 px-5 py-4 md:grid-cols-[1.2fr_1.3fr_1.1fr_.9fr_1fr]">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">{a.assigned_user_name || ''}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">ID: {a.assigned_id}</div>
+                  </div>
+                  <div className="text-sm text-slate-700">
+                    <div className="font-semibold text-slate-900">{a.building_name || ''}</div>
+                    <div className="text-xs text-slate-500">{a.floor_name || ''}</div>
+                  </div>
+                  <div className="text-sm text-slate-600">{fmtDate(a.assigned_start_date)} - {fmtDate(a.assigned_end_date)}</div>
+                  <div>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${badgeClass}`}>{status}</span>
+                  </div>
+                  <div className="hidden text-sm text-slate-600 md:block">{fmtDate(a.assigned_created_at)}</div>
+                </div>
+              );
+            })
+          ) : null}
+
+          {!loading && filteredAssignments.length === 0 ? (
+            <div className="px-5 py-6 text-sm text-slate-500">No assignments found for the current filters.</div>
           ) : null}
         </div>
       </div>

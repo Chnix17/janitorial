@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../auth/AuthContext';
 import { SecureStorage } from '../utils/encryption';
 import { getApiBaseUrl } from '../utils/apiConfig';
 import { toast } from '../utils/toast';
-import './login.css';
 
 export default function Login() {
   const { user, login: authLogin } = useAuth();
@@ -16,25 +15,100 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const [captchaA, setCaptchaA] = useState(0);
-  const [captchaB, setCaptchaB] = useState(0);
+  const [captchaText, setCaptchaText] = useState('');
   const [captchaInput, setCaptchaInput] = useState('');
-  const [captchaError, setCaptchaError] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const captchaCanvasRef = useRef(null);
 
   const from = useMemo(() => location.state?.from?.pathname, [location.state]);
 
   const generateCaptcha = () => {
-    const a = Math.floor(Math.random() * 9) + 1;
-    const b = Math.floor(Math.random() * 9) + 1;
-    setCaptchaA(a);
-    setCaptchaB(b);
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let next = '';
+    for (let i = 0; i < 6; i++) {
+      next += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setCaptchaText(next);
     setCaptchaInput('');
-    setCaptchaError(false);
   };
 
   useEffect(() => {
     generateCaptcha();
   }, []);
+
+  useEffect(() => {
+    const canvas = captchaCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const bg = ctx.createLinearGradient(0, 0, w, h);
+    bg.addColorStop(0, '#eef2ff');
+    bg.addColorStop(1, '#ecfeff');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
+    for (let i = 0; i < 80; i++) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
+      const r = Math.random() * 1.5 + 0.3;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = 'rgba(2, 6, 23, 0.12)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 6; i++) {
+      ctx.beginPath();
+      ctx.moveTo(Math.random() * w, Math.random() * h);
+      ctx.bezierCurveTo(
+        Math.random() * w,
+        Math.random() * h,
+        Math.random() * w,
+        Math.random() * h,
+        Math.random() * w,
+        Math.random() * h
+      );
+      ctx.stroke();
+    }
+
+    const text = (captchaText || '').toUpperCase();
+    const charWidth = w / (text.length + 1);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '700 28px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const x = charWidth * (i + 1);
+      const y = h / 2 + (Math.random() * 10 - 5);
+      const angle = (Math.random() * 0.55 - 0.275);
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+
+      const hue = 200 + Math.floor(Math.random() * 90);
+      ctx.fillStyle = `hsl(${hue}, 70%, 28%)`;
+      ctx.shadowColor = 'rgba(2, 6, 23, 0.18)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 2;
+      ctx.fillText(ch, 0, 0);
+
+      ctx.restore();
+    }
+
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+  }, [captchaText]);
 
   const getRedirectPath = (roleName) => {
     switch (roleName) {
@@ -82,11 +156,9 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const captchaAnswer = captchaA + captchaB;
-    const numericInput = parseInt(captchaInput, 10);
-    if (Number.isNaN(numericInput) || numericInput !== captchaAnswer) {
-      setCaptchaError(true);
-      toast.error('Invalid CAPTCHA. Please solve the math problem correctly.');
+    const normalizedInput = captchaInput.trim().toUpperCase();
+    if (!normalizedInput || normalizedInput !== captchaText) {
+      toast.error('Invalid CAPTCHA. Please enter the letters correctly.');
       generateCaptcha();
       return;
     }
@@ -170,43 +242,73 @@ export default function Login() {
         <img className="cc-login-card-logo" src={`${process.env.PUBLIC_URL}/phinma.png`} alt="PHINMA" />
 
         <div className="cc-login-header">
-          <div className="cc-login-title">CleanCheck PH</div>
+          <div className="cc-login-title">GSD Janitorial</div>
           <div className="cc-login-sub">School Facility Monitoring</div>
         </div>
 
-        <form className="cc-login-form" onSubmit={handleSubmit}>
+        <form className="cc-login-form" onSubmit={handleSubmit} noValidate>
           <label className="cc-label">
             Username
             <input
               className="cc-input"
+              type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter your username"
+              autoFocus
               autoComplete="username"
             />
           </label>
 
           <label className="cc-label">
             Password
-            <input
-              className="cc-input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
+            <div className="cc-input-group">
+              <input
+                className="cc-input"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                aria-label="Password"
+              />
+              <button
+                type="button"
+                className="cc-input-action"
+                onClick={() => setShowPassword((p) => !p)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </label>
 
           <label className="cc-label">
-            CAPTCHA: {captchaA} + {captchaB} = ?
+            <span className="cc-label-row">
+              <span>CAPTCHA</span>
+              <button
+                type="button"
+                className="cc-btn cc-btn-ghost cc-btn-sm"
+                onClick={generateCaptcha}
+                aria-label="Refresh CAPTCHA"
+              >
+                Refresh
+              </button>
+            </span>
+            <canvas
+              ref={captchaCanvasRef}
+              width={240}
+              height={60}
+              style={{ width: '100%', height: 60, borderRadius: 10, display: 'block' }}
+            />
             <input
               className="cc-input"
               value={captchaInput}
               onChange={(e) => {
                 setCaptchaInput(e.target.value);
-                setCaptchaError(false);
               }}
-              inputMode="numeric"
               autoComplete="off"
+              placeholder="Enter the letters"
             />
           </label>
 

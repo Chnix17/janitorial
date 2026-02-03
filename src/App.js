@@ -10,7 +10,7 @@ import StudentDashboard from './pages/Student/StudentDashboard';
 import ProtectedRoute from './utils/ProtectedRoute';
 import NotFound from './components/NotFound';
 import UsersManagement from './pages/Admin/UsersManagement';
-import RoomsBuildingsManagement from './pages/Admin/RoomsBuildingsManagement';
+// import RoomsBuildingsManagement from './pages/Admin/RoomsBuildingsManagement';
 import AdminBuildings from './pages/Admin/AdminBuildings';
 import AdminRooms from './pages/Admin/AdminRooms';
 import AdminFloors from './pages/Admin/AdminFloors';
@@ -45,7 +45,7 @@ function App() {
 
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter basename="/gsd/janitorial">
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />

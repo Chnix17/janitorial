@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { SecureStorage } from '../../utils/encryption';
 import { getApiBaseUrl } from '../../utils/apiConfig';
@@ -55,7 +55,7 @@ export default function UsersManagement() {
     return visibleUsers.slice(start, start + pageSize);
   }, [visibleUsers, page]);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [rolesRes, usersRes] = await Promise.all([
@@ -80,7 +80,7 @@ export default function UsersManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [baseUrl]);
 
   const initials = (name = '') => {
     const parts = String(name).trim().split(/\s+/).slice(0, 2);
@@ -110,7 +110,7 @@ export default function UsersManagement() {
 
   useEffect(() => {
     loadAll();
-  }, []);
+  }, [loadAll]);
 
   const resetForm = () => {
     setEditingUser(null);
@@ -215,7 +215,7 @@ export default function UsersManagement() {
     <div className="p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">User Management</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">User Management</h1>
           <p className="mt-1 text-sm text-slate-500">Create and manage student and admin accounts</p>
         </div>
 
@@ -268,7 +268,7 @@ export default function UsersManagement() {
               return (
                 <div key={u.user_id} className="grid grid-cols-[1.6fr_0.9fr_0.9fr_0.9fr_56px] items-center gap-2 border-b border-slate-100 px-5 py-4">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="grid h-9 w-9 place-items-center rounded-full bg-emerald-50 font-extrabold text-emerald-700">{initials(u.full_name)}</div>
+                    <div className="grid h-9 w-9 place-items-center rounded-full bg-emerald-50 font-semibold text-emerald-700">{initials(u.full_name)}</div>
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-slate-900">{u.full_name}</div>
                       <div className="text-xs text-slate-500">@{u.username}</div>
@@ -278,7 +278,7 @@ export default function UsersManagement() {
                   <div className="text-sm text-slate-800">{roleName}</div>
 
                   <div>
-                    <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-extrabold ${active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
+                    <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium ${active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-emerald-600' : 'bg-slate-500'}`}></span>
                       {active ? 'Active' : 'Inactive'}
                     </span>
@@ -368,7 +368,7 @@ export default function UsersManagement() {
         >
           <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-base font-extrabold text-slate-900">{editingUser ? 'Update User' : 'Create User'}</div>
+              <div className="text-base font-semibold text-slate-900">{editingUser ? 'Update User' : 'Create User'}</div>
               <button
                 type="button"
                 onClick={() => { setOpenForm(false); resetForm(); }}

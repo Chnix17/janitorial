@@ -602,9 +602,24 @@
             $stmt->execute([$user_id]);
             $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+            $assignStmt = $this->conn->prepare('SELECT assigned_id, assigned_start_date, assigned_end_date FROM tblassigned WHERE assigned_user_id = ? ORDER BY assigned_created_at DESC');
+            $assignStmt->execute([$user_id]);
+            $rawAssignments = $assignStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $assignmentsById = [];
+            foreach ($rawAssignments as $a) {
+                $aid = (int)($a['assigned_id'] ?? 0);
+                if ($aid <= 0) continue;
+                if (!isset($assignmentsById[$aid])) {
+                    $assignmentsById[$aid] = $a;
+                }
+            }
+            $assignments = array_values($assignmentsById);
+
             return json_encode([
                 'success' => true,
-                'data' => $history
+                'data' => $history,
+                'assignments' => $assignments
             ]);
         } catch (PDOException $e) {
             return json_encode([

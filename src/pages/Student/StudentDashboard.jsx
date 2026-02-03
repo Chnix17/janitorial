@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { SecureStorage } from '../../utils/encryption';
 import { getApiBaseUrl } from '../../utils/apiConfig';
@@ -10,7 +10,6 @@ const withSlash = (base) => (base.endsWith('/') ? base : base + '/');
 export default function StudentDashboard() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [assignment, setAssignment] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [activity, setActivity] = useState({ count: 0, isActive: false });
 
@@ -25,9 +24,8 @@ export default function StudentDashboard() {
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [user]);
 
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     if (!assignedUserId) {
-      setAssignment(null);
       setRooms([]);
       setActivity({ count: 0, isActive: false });
       return;
@@ -48,12 +46,10 @@ export default function StudentDashboard() {
       );
 
       if (!assignmentRes?.data?.success) {
-        setAssignment(null);
         setRooms([]);
         toast.error(assignmentRes?.data?.message || 'Failed to load assignment.');
       } else {
         const a = assignmentRes?.data?.data || null;
-        setAssignment(a);
 
         if (a?.assigned_floor_building_id) {
           const roomsRes = await axios.post(
@@ -86,11 +82,11 @@ export default function StudentDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [assignedUserId, baseUrl]);
 
   useEffect(() => {
     loadDashboard();
-  }, [assignedUserId]);
+  }, [loadDashboard]);
 
   const todaysAssignments = rooms.length;
   const completedToday = activity.count;
@@ -101,7 +97,7 @@ export default function StudentDashboard() {
     <div className="p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Good morning, {user?.full_name || 'Student'}!</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Good morning, {user?.full_name || 'Student'}!</h1>
           <p className="mt-1 text-sm text-slate-500">Here’s your inspection overview for today.</p>
         </div>
       </div>
@@ -109,25 +105,25 @@ export default function StudentDashboard() {
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Today's Assignments</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">{todaysAssignments}</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">{todaysAssignments}</div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Pending Inspections</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">{pendingInspections}</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">{pendingInspections}</div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Completed Today</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">{completedToday}</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">{completedToday}</div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total Inspections</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">{totalInspections}</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">{totalInspections}</div>
         </div>
       </div>
 
       <div className="mt-5 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
         <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
-          <div className="text-sm font-extrabold text-slate-900">Today’s Room Assignments</div>
+          <div className="text-sm font-semibold text-slate-900">Today’s Room Assignments</div>
           <span className="text-xs font-semibold text-slate-400">View All →</span>
         </div>
         <div className="p-5">
@@ -154,7 +150,7 @@ export default function StudentDashboard() {
       </div>
 
       <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-        <div className="text-sm font-extrabold text-slate-900">Your Activity Status</div>
+        <div className="text-sm font-semibold text-slate-900">Your Activity Status</div>
         <div className="mt-4 flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
           <span className={`h-2 w-2 rounded-full ${activity.isActive ? 'bg-emerald-500' : 'bg-amber-500'}`} />
           <div>

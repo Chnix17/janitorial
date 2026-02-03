@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { SecureStorage } from '../../utils/encryption';
 import { getApiBaseUrl } from '../../utils/apiConfig';
@@ -48,7 +48,7 @@ export default function AdminFloors() {
     });
   }, [floors, search, buildingFilter, floorNameById]);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [bRes, fRes, fnRes] = await Promise.all([
@@ -81,11 +81,11 @@ export default function AdminFloors() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [baseUrl]);
 
   useEffect(() => {
     loadAll();
-  }, []);
+  }, [loadAll]);
 
   useEffect(() => {
     if (!openMenuId) return;
@@ -204,7 +204,7 @@ export default function AdminFloors() {
     <div className="p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Floors</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Floors</h1>
           <p className="mt-1 text-sm text-slate-500">Assign floor names to buildings</p>
         </div>
 
@@ -325,7 +325,7 @@ export default function AdminFloors() {
         >
           <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-base font-extrabold text-slate-900">{editing ? 'Edit Floor' : 'Add Floor'}</div>
+              <div className="text-base font-semibold text-slate-900">{editing ? 'Edit Floor' : 'Add Floor'}</div>
               <button type="button" onClick={closeModal} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100">
                 ✕
               </button>

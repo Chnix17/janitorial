@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { SecureStorage } from '../../utils/encryption';
 import { getApiBaseUrl } from '../../utils/apiConfig';
@@ -25,7 +25,6 @@ export default function AdminActivity() {
   const [selectedAssignmentId, setSelectedAssignmentId] = useState('');
   const [rangeLoading, setRangeLoading] = useState(false);
   const [rangeSummary, setRangeSummary] = useState(null);
-  const [rangeMissedGroups, setRangeMissedGroups] = useState([]);
   const [rangeDays, setRangeDays] = useState([]);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -93,14 +92,9 @@ export default function AdminActivity() {
     return out;
   };
 
-  const getMissedChecklistLabel = (value) => {
-    if (value === null || typeof value === 'undefined') return 'Pending';
-    if (Number(value) === 1) return 'OK';
-    if (Number(value) === 0) return 'No Action';
-    return 'Pending';
-  };
+  
 
-  const loadSummary = async () => {
+  const loadSummary = useCallback(async () => {
     setLoading(true);
     try {
       const res = await axios.post(
@@ -121,9 +115,9 @@ export default function AdminActivity() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [baseUrl, date]);
 
-  const loadAssignments = async () => {
+  const loadAssignments = useCallback(async () => {
     setAssignmentsLoading(true);
     try {
       const res = await axios.post(
@@ -143,7 +137,7 @@ export default function AdminActivity() {
     } finally {
       setAssignmentsLoading(false);
     }
-  };
+  }, [baseUrl]);
 
   const selectedAssignment = useMemo(() => {
     const id = String(selectedAssignmentId || '');
@@ -161,7 +155,6 @@ export default function AdminActivity() {
     const a = selectedAssignment;
     if (!a?.assigned_user_id || !a?.assigned_floor_building_id || !a?.assigned_start_date || !a?.assigned_end_date) {
       setRangeSummary(null);
-      setRangeMissedGroups([]);
       setRangeDays([]);
       return;
     }
@@ -228,13 +221,6 @@ export default function AdminActivity() {
       const anyError = missedResults.find((x) => !!x.error);
       if (anyError) toast.error(anyError.error);
 
-      setRangeMissedGroups(
-        missedResults
-          .map((r) => ({ date: r.date, rooms: r.rooms }))
-          .filter((g) => Array.isArray(g.rooms) && g.rooms.length > 0)
-          .sort((a2, b2) => String(b2.date).localeCompare(String(a2.date)))
-      );
-
       const missedCountByDate = new Map();
       for (const mr of missedResults) {
         missedCountByDate.set(String(mr.date), Array.isArray(mr.rooms) ? mr.rooms.length : 0);
@@ -272,7 +258,6 @@ export default function AdminActivity() {
       });
     } catch (e) {
       setRangeSummary(null);
-      setRangeMissedGroups([]);
       setRangeDays([]);
       toast.error('Network error. Please try again.');
     } finally {
@@ -316,27 +301,27 @@ export default function AdminActivity() {
 
   useEffect(() => {
     loadSummary();
-  }, [date]);
+  }, [loadSummary]);
 
   useEffect(() => {
     loadAssignments();
-  }, []);
+  }, [loadAssignments]);
 
   return (
     <div className="p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Activity Monitor</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Activity Monitor</h1>
           <p className="mt-1 text-sm text-slate-500">Monitor each student’s inspection activity and drill into details.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
             <button
               type="button"
               className={viewMode === 'daily'
-                ? 'rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white'
-                : 'rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-white'}
+                ? 'rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white'
+                : 'rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-white'}
               onClick={() => setViewMode('daily')}
             >
               Daily Monitor
@@ -344,8 +329,8 @@ export default function AdminActivity() {
             <button
               type="button"
               className={viewMode === 'assignment'
-                ? 'rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white'
-                : 'rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-white'}
+                ? 'rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white'
+                : 'rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-white'}
               onClick={() => setViewMode('assignment')}
             >
               Assignment Range
@@ -375,7 +360,7 @@ export default function AdminActivity() {
           <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div className="text-sm font-extrabold text-slate-900">Assignment Range Progress</div>
+                <div className="text-sm font-semibold text-slate-900">Assignment Range Progress</div>
                 <div className="mt-1 text-xs text-slate-500">
                   {rangeSummary
                     ? `${rangeSummary.studentName} • ${rangeSummary.buildingName} • ${rangeSummary.floorName} • ${fmtDate(rangeSummary.start)} - ${fmtDate(rangeSummary.end)}`
@@ -407,27 +392,27 @@ export default function AdminActivity() {
                 </button>
               </div>
 
-              {rangeSummary ? (
-                <div className="text-xs font-semibold text-slate-600">Up to: <span className="font-extrabold text-slate-900">{fmtDate(rangeSummary.endLimit)}</span></div>
-              ) : null}
+             
             </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Days in Range</div>
-                <div className="mt-2 text-2xl font-extrabold text-slate-900">{rangeLoading ? '—' : (rangeSummary?.dayCount ?? '—')}</div>
+                <div className="mt-2 text-2xl font-semibold text-slate-900">{rangeLoading ? '—' : (rangeSummary?.dayCount ?? '—')}</div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Rooms / Day</div>
-                <div className="mt-2 text-2xl font-extrabold text-slate-900">{rangeLoading ? '—' : (rangeSummary?.roomCount ?? '—')}</div>
+                <div className="mt-2 text-2xl font-semibold text-slate-900">{rangeLoading ? '—' : (rangeSummary?.roomCount ?? '—')}</div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Rooms Inspected</div>
-                <div className="mt-2 text-2xl font-extrabold text-slate-900">{rangeLoading ? '—' : (rangeSummary?.roomsInspected ?? '—')}</div>
+                <div className="mt-2 text-2xl font-semibold text-slate-900">{rangeLoading ? '—' : (rangeSummary?.roomsInspected ?? '—')}</div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Progress</div>
-                <div className="mt-2 text-2xl font-extrabold text-slate-900">{rangeLoading ? '—' : `${(rangeSummary?.progressPct ?? 0).toFixed(0)}%`}</div>
+                <div className={`mt-2 text-2xl font-semibold ${(rangeSummary?.progressPct ?? 0) > 66 ? 'text-emerald-700' : (rangeSummary?.progressPct ?? 0) > 33 ? 'text-amber-700' : 'text-rose-700'}`}>
+                  {rangeLoading ? '—' : `${(rangeSummary?.progressPct ?? 0).toFixed(0)}%`}
+                </div>
               </div>
             </div>
           </div>
@@ -435,13 +420,13 @@ export default function AdminActivity() {
           <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
               <div>
-                <div className="text-sm font-extrabold text-slate-900">Assignment Days</div>
+                <div className="text-sm font-semibold text-slate-900">Assignment Days</div>
                 <div className="mt-1 text-xs text-slate-500">One entry per day. Click a day to open room checklist details.</div>
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-slate-700">{rangeLoading ? '—' : `${rangeTotals.totalInspectedRooms} inspected`}</div>
-                <div className="rounded-full bg-rose-100 px-3 py-1 text-xs font-extrabold text-rose-700">{rangeLoading ? '—' : `${rangeTotals.totalMissedRooms} missed`}</div>
+                <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">{rangeLoading ? '—' : `${rangeTotals.totalInspectedRooms} inspected`}</div>
+                <div className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">{rangeLoading ? '—' : `${rangeTotals.totalMissedRooms} missed`}</div>
               </div>
             </div>
 
@@ -471,7 +456,7 @@ export default function AdminActivity() {
                       onClick={() => openInspectionsModal(selectedAssignment.assigned_user_id, d.date)}
                       className="grid w-full grid-cols-[1fr_140px_120px_120px] items-center gap-2 border-b border-slate-100 px-5 py-4 text-left hover:bg-slate-50"
                     >
-                      <div className="text-sm font-semibold text-slate-900">{fmtDate(d.date)}</div>
+                      <div className="text-sm font-medium text-slate-900">{fmtDate(d.date)}</div>
                       <div className="text-sm text-slate-600">{rangeSummary?.floorName || '—'}</div>
                       <div className="text-sm text-slate-600">{inspected}/{total}</div>
                       <div className="text-sm font-semibold text-rose-700">{missed}</div>
@@ -487,34 +472,34 @@ export default function AdminActivity() {
       {viewMode === 'daily' ? (
         <>
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Students</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">{loading ? '—' : stats.totalStudents}</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">{loading ? '—' : stats.totalStudents}</div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Active</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">{loading ? '—' : stats.active}</div>
+          <div className="mt-2 text-2xl font-semibold text-emerald-700">{loading ? '—' : stats.active}</div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Inactive</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">{loading ? '—' : stats.inactive}</div>
+          <div className="mt-2 text-2xl font-semibold text-amber-700">{loading ? '—' : stats.inactive}</div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Rooms Inspected</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">{loading ? '—' : stats.totalRooms}</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">{loading ? '—' : stats.totalRooms}</div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Checklist Ops</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">{loading ? '—' : stats.totalOps}</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">{loading ? '—' : stats.totalOps}</div>
         </div>
       </div>
 
 
       <div className="mt-5">
         <div className="rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
             <div>
-              <div className="text-sm font-extrabold text-slate-900">Students on {fmtDate(date)}</div>
+              <div className="text-sm font-semibold text-slate-900">Students on {fmtDate(date)}</div>
               <div className="mt-1 text-xs text-slate-500">Click a student to view history and open inspection details.</div>
             </div>
 
@@ -539,33 +524,37 @@ export default function AdminActivity() {
                   onClick={() => openInspectionsModal(r.user_id, date)}
                   className={'w-full px-5 py-4 text-left hover:bg-slate-50'}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-slate-900">{r.full_name}</div>
-                      <div className="mt-1 truncate text-xs text-slate-500">{r.username}</div>
-                      <div className="mt-2 text-xs text-slate-500">Last activity: {r.last_activity_at ? fmtTime(r.last_activity_at) : '—'}</div>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-2">
-                      <div className={`rounded-full px-2 py-0.5 text-xs font-semibold ${active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
-                        {active ? 'Active' : 'Inactive'}
+                  <div className="rounded-xl bg-slate-50/60 px-4 py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-slate-900">{r.full_name}</div>
+                        <div className="mt-1 truncate text-xs text-slate-500">@{r.username}</div>
+                        <div className="mt-1 text-xs text-slate-500">Last activity: {r.last_activity_at ? fmtTime(r.last_activity_at) : '—'}</div>
                       </div>
-                      <div className="text-xs text-slate-600">Rooms: <span className="font-semibold text-slate-900">{Number(r.rooms_inspected) || 0}</span></div>
-                      <div className="text-xs text-slate-600">Ops: <span className="font-semibold text-slate-900">{Number(r.activity_count) || 0}</span></div>
-                    </div>
-                  </div>
 
-                  <div className="mt-3 flex items-center justify-end">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openInspectionsModal(r.user_id, date);
-                      }}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                      View {fmtDate(date)}
-                    </button>
+                      <div className="flex items-center gap-3">
+                        <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-emerald-600' : 'bg-slate-500'}`} />
+                          {active ? 'Active' : 'Inactive'}
+                        </div>
+
+                        <div className="hidden sm:flex items-center gap-4 text-xs text-slate-600">
+                          <div>Rooms: <span className="font-semibold text-slate-900">{Number(r.rooms_inspected) || 0}</span></div>
+                          <div>Ops: <span className="font-semibold text-slate-900">{Number(r.activity_count) || 0}</span></div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openInspectionsModal(r.user_id, date);
+                          }}
+                          className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                        >
+                          View {fmtDate(date)}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </button>
               );
@@ -591,7 +580,7 @@ export default function AdminActivity() {
             <div className="border-b border-slate-200 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-base font-extrabold text-slate-900">Inspections for {fmtDate(modalDate)}</div>
+                  <div className="text-base font-semibold text-slate-900">Inspections for {fmtDate(modalDate)}</div>
                   <div className="mt-1 text-xs text-slate-500">
                     {modalLoading ? 'Loading…' : `${modalInspections.length} room(s)`}
                   </div>
@@ -619,10 +608,10 @@ export default function AdminActivity() {
                     const isPastDate = String(modalDate || '') < String(todayYmd);
                     const displayStatus = insp.assigned_status || (hasUpdate ? 'Done' : (isPastDate ? 'Missed' : 'Pending'));
                     const badgeClass =
-                      displayStatus === 'Excellent' ? 'bg-emerald-100 text-emerald-700' :
-                      displayStatus === 'Good' ? 'bg-sky-100 text-sky-700' :
-                      displayStatus === 'Fair' ? 'bg-amber-100 text-amber-700' :
-                      displayStatus === 'Poor' ? 'bg-rose-100 text-rose-700' :
+                      displayStatus === 'excellent' ? 'bg-emerald-100 text-emerald-700' :
+                      displayStatus === 'good' ? 'bg-sky-100 text-sky-700' :
+                      displayStatus === 'fair' ? 'bg-amber-100 text-amber-700' :
+                      displayStatus === 'poor' ? 'bg-rose-100 text-rose-700' :
                       displayStatus === 'Missed' ? 'bg-rose-100 text-rose-700' :
                       displayStatus === 'Done' ? 'bg-emerald-50 text-emerald-700' :
                       'bg-slate-200 text-slate-700';
@@ -636,12 +625,15 @@ export default function AdminActivity() {
                         <div className="mt-1 text-xs text-slate-500">{insp.building_name}{insp.floor_name ? ` • ${insp.floor_name}` : ''}</div>
 
                         {insp.assigned_remarks ? (
-                          <p className="mt-3 text-sm text-slate-700">{insp.assigned_remarks}</p>
+                        <p className="mt-3 text-sm text-slate-700">
+                          <span className="font-bold italic">Remarks:</span>{" "}
+                          <span className="italic">{insp.assigned_remarks}</span>
+                        </p>
                         ) : null}
 
                         {insp.checklist && insp.checklist.length > 0 ? (
                           <div className="mt-4 border-t border-slate-200 pt-3">
-                            <div className="text-[11px] font-extrabold tracking-wide text-slate-500">CHECKLIST DETAILS</div>
+                            <div className="text-[11px] font-semibold tracking-wide text-slate-500">CHECKLIST DETAILS</div>
                             <div className="mt-2 grid gap-2">
                               {insp.checklist.map((item, j) => {
                                 const v = item.operation_is_functional;

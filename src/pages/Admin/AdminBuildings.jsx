@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { SecureStorage } from '../../utils/encryption';
 import { getApiBaseUrl } from '../../utils/apiConfig';
@@ -39,7 +39,7 @@ export default function AdminBuildings() {
     return buildings.filter((b) => String(b.building_name || '').toLowerCase().includes(q));
   }, [buildings, search]);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [bRes, rRes] = await Promise.all([
@@ -64,11 +64,11 @@ export default function AdminBuildings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [baseUrl]);
 
   useEffect(() => {
     loadAll();
-  }, []);
+  }, [loadAll]);
 
   useEffect(() => {
     if (!openMenuId) return;
@@ -163,7 +163,7 @@ export default function AdminBuildings() {
     <div className="p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Buildings</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Buildings</h1>
           <p className="mt-1 text-sm text-slate-500">Manage school buildings</p>
         </div>
 
@@ -269,7 +269,7 @@ export default function AdminBuildings() {
         >
           <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-base font-extrabold text-slate-900">{editing ? 'Edit Building' : 'Add Building'}</div>
+              <div className="text-base font-semibold text-slate-900">{editing ? 'Edit Building' : 'Add Building'}</div>
               <button type="button" onClick={closeModal} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100">
                 ✕
               </button>
