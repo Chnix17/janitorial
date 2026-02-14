@@ -9,6 +9,7 @@ import StudentDashboard from './pages/StudentDashboard';
 import AdminAssignments from './pages/Admin/AdminAssignments';
 import StudentAssignments from './pages/Student/StudentAssignments';
 import Activity from './pages/Student/Activity';
+import AdminReports from './pages/Admin/AdminReports';
 
 const roleHomePath = (role) => {
   if (role === 'admin') return '/admin';
@@ -36,7 +37,7 @@ export default function AppRoutes() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/users" element={<div>Users (coming soon)</div>} />
           <Route path="/admin/assignments" element={<AdminAssignments />} />
-          <Route path="/admin/reports" element={<div>Reports (coming soon)</div>} />
+          <Route path="/admin/reports" element={<AdminReports />} />
         </Route>
       </Route>
 

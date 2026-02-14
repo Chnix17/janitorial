@@ -12,6 +12,8 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [activity, setActivity] = useState({ count: 0, isActive: false });
+  const [assignments, setAssignments] = useState([]);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState('');
 
   const baseUrl = useMemo(() => {
     const storedUrl = SecureStorage.getLocalItem('janitorial_url');
@@ -24,18 +26,34 @@ export default function StudentDashboard() {
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [user]);
 
+  const todayYmd = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }, []);
+
+  const selectedAssignment = useMemo(() => {
+    const id = Number(selectedAssignmentId);
+    if (!id) return null;
+    return assignments.find((a) => Number(a.assigned_id) === id) || null;
+  }, [assignments, selectedAssignmentId]);
+
   const loadDashboard = useCallback(async () => {
     if (!assignedUserId) {
       setRooms([]);
       setActivity({ count: 0, isActive: false });
+      setAssignments([]);
+      setSelectedAssignmentId('');
       return;
     }
 
     setLoading(true);
     try {
-      const assignmentRes = await axios.post(
+      const assignmentsRes = await axios.post(
         `${baseUrl}student.php`,
-        { operation: 'getCurrentAssignment', json: { assigned_user_id: assignedUserId } },
+        { operation: 'getAssignments', json: { assigned_user_id: assignedUserId } },
         { headers: { 'Content-Type': 'application/json' } }
       );
 
@@ -45,26 +63,30 @@ export default function StudentDashboard() {
         { headers: { 'Content-Type': 'application/json' } }
       );
 
-      if (!assignmentRes?.data?.success) {
+      if (!assignmentsRes?.data?.success) {
+        setAssignments([]);
+        setSelectedAssignmentId('');
         setRooms([]);
-        toast.error(assignmentRes?.data?.message || 'Failed to load assignment.');
+        toast.error(assignmentsRes?.data?.message || 'Failed to load assignments.');
       } else {
-        const a = assignmentRes?.data?.data || null;
+        const list = Array.isArray(assignmentsRes.data.data) ? assignmentsRes.data.data : [];
+        setAssignments(list);
 
-        if (a?.assigned_floor_building_id) {
-          const roomsRes = await axios.post(
-            `${baseUrl}student.php`,
-            { operation: 'getAssignedRooms', json: { assigned_floor_building_id: Number(a.assigned_floor_building_id) } },
-            { headers: { 'Content-Type': 'application/json' } }
-          );
-          if (roomsRes?.data?.success) {
-            setRooms(Array.isArray(roomsRes.data.data) ? roomsRes.data.data : []);
-          } else {
+        let nextSelectedId = selectedAssignmentId;
+        const hasSelected = list.some((a) => String(a.assigned_id) === String(nextSelectedId));
+        if (!hasSelected) {
+          const active = list.find((a) => todayYmd >= a.assigned_start_date && todayYmd <= a.assigned_end_date);
+          const started = list.find((a) => todayYmd >= a.assigned_start_date);
+          nextSelectedId = String(active?.assigned_id || started?.assigned_id || '');
+          setSelectedAssignmentId(nextSelectedId);
+        }
+
+        if (nextSelectedId) {
+          const chosen = list.find((a) => String(a.assigned_id) === String(nextSelectedId)) || null;
+          if (chosen && todayYmd < chosen.assigned_start_date) {
+            setSelectedAssignmentId('');
             setRooms([]);
-            toast.error(roomsRes?.data?.message || 'Failed to load rooms.');
           }
-        } else {
-          setRooms([]);
         }
       }
 
@@ -82,11 +104,41 @@ export default function StudentDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [assignedUserId, baseUrl]);
+  }, [assignedUserId, baseUrl, selectedAssignmentId, todayYmd]);
+
+  const loadRoomsForAssignment = useCallback(async () => {
+    if (!selectedAssignmentId) {
+      setRooms([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const roomsRes = await axios.post(
+        `${baseUrl}student.php`,
+        { operation: 'getAssignedRooms', json: { assigned_id: Number(selectedAssignmentId) } },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      if (roomsRes?.data?.success) {
+        setRooms(Array.isArray(roomsRes.data.data) ? roomsRes.data.data : []);
+      } else {
+        setRooms([]);
+        toast.error(roomsRes?.data?.message || 'Failed to load rooms.');
+      }
+    } catch (e) {
+      setRooms([]);
+      toast.error('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [baseUrl, selectedAssignmentId]);
 
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    loadRoomsForAssignment();
+  }, [loadRoomsForAssignment]);
 
   const todaysAssignments = rooms.length;
   const completedToday = activity.count;
@@ -124,7 +176,26 @@ export default function StudentDashboard() {
       <div className="mt-5 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
         <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div className="text-sm font-semibold text-slate-900">Today’s Room Assignments</div>
-          <span className="text-xs font-semibold text-slate-400">View All →</span>
+          <div className="flex items-center gap-3">
+            {assignments.length > 1 && (
+              <select
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                value={selectedAssignmentId}
+                onChange={(e) => setSelectedAssignmentId(e.target.value)}
+              >
+                {assignments.map((a) => (
+                  <option
+                    key={a.assigned_id}
+                    value={a.assigned_id}
+                    disabled={todayYmd < a.assigned_start_date}
+                  >
+                    {a.building_name} • {a.floor_name} ({a.assigned_start_date} to {a.assigned_end_date}){todayYmd < a.assigned_start_date ? ' - Not started yet' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            <span className="text-xs font-semibold text-slate-400">View All →</span>
+          </div>
         </div>
         <div className="p-5">
           {loading ? (

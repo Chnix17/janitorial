@@ -11,6 +11,8 @@
     "antd": "^6.2.0",
     "axios": "^1.13.2",
     "crypto-js": "^4.2.0",
+    "jspdf": "^4.1.0",
+    "jspdf-autotable": "^5.0.7",
     "react": "^19.2.3",
     "react-calendar": "^6.0.0",
     "react-calendar-heatmap": "^1.10.0",

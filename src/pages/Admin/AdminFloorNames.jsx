@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import axios from 'axios';
 
@@ -9,7 +9,6 @@ import { getApiBaseUrl } from '../../utils/apiConfig';
 
 
 const withSlash = (base) => (base.endsWith('/') ? base : base + '/');
-
 
 
 export default function AdminFloorNames() {
@@ -60,7 +59,7 @@ export default function AdminFloorNames() {
 
 
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
 
     setLoading(true);
 
@@ -92,7 +91,7 @@ export default function AdminFloorNames() {
 
     }
 
-  };
+  }, [baseUrl]);
 
 
 
@@ -100,7 +99,7 @@ export default function AdminFloorNames() {
 
     loadAll();
 
-  }, []);
+  }, [loadAll]);
 
 
 
@@ -354,11 +353,9 @@ export default function AdminFloorNames() {
 
       <div className="mt-5 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
 
-        <div className="grid grid-cols-[1fr_120px_56px] gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-500">
+        <div className="grid grid-cols-[1fr_56px] gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-500">
 
           <div>Floor Name</div>
-
-          <div>ID</div>
 
           <div />
 
@@ -370,11 +367,9 @@ export default function AdminFloorNames() {
 
           {filtered.map((f) => (
 
-            <div key={f.floor_id} className="grid grid-cols-[1fr_120px_56px] items-center gap-2 border-b border-slate-100 px-5 py-4">
+            <div key={f.floor_id} className="grid grid-cols-[1fr_56px] items-center gap-2 border-b border-slate-100 px-5 py-4">
 
               <div className="text-sm font-semibold text-slate-900">{f.floor_name}</div>
-
-              <div className="text-sm text-slate-700">{f.floor_id}</div>
 
 
 

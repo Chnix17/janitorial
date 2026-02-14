@@ -189,6 +189,9 @@ export default function Sidebar({ title, homePath, isMobile, isOpen, onOpen, onC
               <NavItem to="/admin/activity" icon={Icon.Activity}>
                 Activity
               </NavItem>
+              <NavItem to="/admin/reports" icon={Icon.Clipboard}>
+                Reports
+              </NavItem>
             </div>
           ) : (
             <div className="cc-nav-section">

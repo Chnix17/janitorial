@@ -33,6 +33,7 @@ CREATE TABLE `tblassigned` (
   `assigned_floor_building_id` int(11) NOT NULL,
   `assigned_start_date` date NOT NULL,
   `assigned_end_date` date DEFAULT NULL,
+  `assigned_status_enum` enum('active','completed','inactive') NOT NULL DEFAULT 'active',
   `assigned_by_user_id` int(11) NOT NULL,
   `assigned_created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -41,8 +42,8 @@ CREATE TABLE `tblassigned` (
 -- Dumping data for table `tblassigned`
 --
 
-INSERT INTO `tblassigned` (`assigned_id`, `assigned_user_id`, `assigned_floor_building_id`, `assigned_start_date`, `assigned_end_date`, `assigned_by_user_id`, `assigned_created_at`) VALUES
-(1, 2, 1, '2026-01-26', '2026-03-31', 1, '2026-01-26 05:12:56');
+INSERT INTO `tblassigned` (`assigned_id`, `assigned_user_id`, `assigned_floor_building_id`, `assigned_start_date`, `assigned_end_date`, `assigned_status_enum`, `assigned_by_user_id`, `assigned_created_at`) VALUES
+(1, 2, 1, '2026-01-26', '2026-03-31', 'active', 1, '2026-01-26 05:12:56');
 
 -- --------------------------------------------------------
 

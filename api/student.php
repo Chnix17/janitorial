@@ -91,6 +91,39 @@
         }
     }
 
+    public function getAssignments($data) {
+        try {
+            if (!is_array($data) || !isset($data['assigned_user_id'])) {
+                return json_encode([
+                    'success' => false,
+                    'message' => 'Missing required field: assigned_user_id'
+                ]);
+            }
+
+            $assigned_user_id = (int)$data['assigned_user_id'];
+            if ($assigned_user_id <= 0) {
+                return json_encode([
+                    'success' => false,
+                    'message' => 'Invalid assigned_user_id.'
+                ]);
+            }
+
+            $stmt = $this->conn->prepare('SELECT a.assigned_id, a.assigned_user_id, a.assigned_floor_building_id, bf.building_id, b.building_name, bf.floor_id, f.floor_name, a.assigned_start_date, a.assigned_end_date, a.assigned_by_user_id, a.assigned_created_at FROM tblassigned a JOIN tblbuildingfloor bf ON bf.floorbuilding_id = a.assigned_floor_building_id JOIN tblbuilding b ON b.building_id = bf.building_id JOIN tblfloor f ON f.floor_id = bf.floor_id WHERE a.assigned_user_id = ? ORDER BY a.assigned_created_at DESC');
+            $stmt->execute([$assigned_user_id]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            return json_encode([
+                'success' => true,
+                'data' => $rows
+            ]);
+        } catch (PDOException $e) {
+            return json_encode([
+                'success' => false,
+                'message' => 'Database error: ' . $e->getMessage()
+            ]);
+        }
+    }
+
     public function getMissedClassrooms($data) {
         try {
             if (!is_array($data) || !isset($data['assigned_user_id'])) {
@@ -425,9 +458,13 @@
 
     public function getAssignedRooms($data) {
         try {
+            $assigned_id = null;
             $assigned_user_id = null;
             $assigned_floor_building_id = null;
 
+            if (is_array($data) && isset($data['assigned_id']) && $data['assigned_id'] !== '') {
+                $assigned_id = (int)$data['assigned_id'];
+            }
             if (is_array($data) && isset($data['assigned_user_id']) && $data['assigned_user_id'] !== '') {
                 $assigned_user_id = (int)$data['assigned_user_id'];
             }
@@ -435,11 +472,30 @@
                 $assigned_floor_building_id = (int)$data['assigned_floor_building_id'];
             }
 
+            if ($assigned_id) {
+                $assignStmt = $this->conn->prepare('SELECT assigned_id, assigned_user_id, assigned_floor_building_id FROM tblassigned WHERE assigned_id = ? LIMIT 1');
+                $assignStmt->execute([$assigned_id]);
+                $row = $assignStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$row) {
+                    return json_encode([
+                        'success' => false,
+                        'message' => 'Assignment not found.'
+                    ]);
+                }
+                $assigned_floor_building_id = (int)($row['assigned_floor_building_id'] ?? 0);
+                if (!$assigned_user_id) {
+                    $assigned_user_id = (int)($row['assigned_user_id'] ?? 0);
+                }
+            }
+
             if (!$assigned_floor_building_id && $assigned_user_id) {
                 $active = $this->getCurrentAssignment(['assigned_user_id' => $assigned_user_id]);
                 $decoded = json_decode($active, true);
                 if (is_array($decoded) && ($decoded['success'] ?? false) && is_array($decoded['data'] ?? null)) {
                     $assigned_floor_building_id = (int)($decoded['data']['assigned_floor_building_id'] ?? 0);
+                    if (!$assigned_id) {
+                        $assigned_id = (int)($decoded['data']['assigned_id'] ?? 0);
+                    }
                 }
             }
 
@@ -450,8 +506,13 @@
                 ]);
             }
 
-            $stmt = $this->conn->prepare('SELECT r.room_id, r.room_number, r.room_building_floor_id, bf.building_id, b.building_name, bf.floor_id, f.floor_name, CASE WHEN s.assigned_status_id IS NOT NULL THEN \'Done\' ELSE \'Pending\' END AS status FROM tblroom r JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id JOIN tblbuilding b ON b.building_id = bf.building_id JOIN tblfloor f ON f.floor_id = bf.floor_id LEFT JOIN tblassignedstatus s ON s.room_id = r.room_id AND s.completion_date = CURDATE() WHERE r.room_building_floor_id = ? ORDER BY r.room_number ASC');
-            $stmt->execute([$assigned_floor_building_id]);
+            if ($assigned_id) {
+                $stmt = $this->conn->prepare('SELECT r.room_id, r.room_number, r.room_building_floor_id, bf.building_id, b.building_name, bf.floor_id, f.floor_name, CASE WHEN s.assigned_status_id IS NOT NULL THEN \'Done\' ELSE \'Pending\' END AS status FROM tblroom r JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id JOIN tblbuilding b ON b.building_id = bf.building_id JOIN tblfloor f ON f.floor_id = bf.floor_id LEFT JOIN tblassignedstatus s ON s.room_id = r.room_id AND s.assigned_id = ? AND s.completion_date = CURDATE() WHERE r.room_building_floor_id = ? ORDER BY r.room_number ASC');
+                $stmt->execute([$assigned_id, $assigned_floor_building_id]);
+            } else {
+                $stmt = $this->conn->prepare('SELECT r.room_id, r.room_number, r.room_building_floor_id, bf.building_id, b.building_name, bf.floor_id, f.floor_name, CASE WHEN s.assigned_status_id IS NOT NULL THEN \'Done\' ELSE \'Pending\' END AS status FROM tblroom r JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id JOIN tblbuilding b ON b.building_id = bf.building_id JOIN tblfloor f ON f.floor_id = bf.floor_id LEFT JOIN tblassignedstatus s ON s.room_id = r.room_id AND s.completion_date = CURDATE() WHERE r.room_building_floor_id = ? ORDER BY r.room_number ASC');
+                $stmt->execute([$assigned_floor_building_id]);
+            }
             $rooms = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             return json_encode([
@@ -483,13 +544,48 @@
                 ]);
             }
 
-            $stmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_name, c.checklist_room_id, o.operation_id, o.operation_is_functional, o.operation_updated_at, o.operation_updated_by FROM tblroomchecklist c LEFT JOIN (SELECT ao1.operation_id, ao1.operation_is_functional, ao1.operation_updated_at, ao1.operation_updated_by, ao1.operation_room_id, ao1.operation_checklist_id FROM tblassignedoperation ao1 INNER JOIN (SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at FROM tblassignedoperation WHERE DATE(operation_updated_at) = CURDATE() GROUP BY operation_room_id, operation_checklist_id) ao2 ON ao2.operation_room_id = ao1.operation_room_id AND ao2.operation_checklist_id = ao1.operation_checklist_id AND ao2.max_updated_at = ao1.operation_updated_at) o ON o.operation_room_id = c.checklist_room_id AND o.operation_checklist_id = c.checklist_id WHERE c.checklist_room_id = ? ORDER BY c.checklist_name ASC');
-            $stmt->execute([$room_id]);
+            $assigned_id = null;
+            $reported_by = null;
+            if (isset($data['assigned_id']) && $data['assigned_id'] !== '') {
+                $assigned_id = (int)$data['assigned_id'];
+            }
+            if (isset($data['assigned_reported_by']) && $data['assigned_reported_by'] !== '') {
+                $reported_by = (int)$data['assigned_reported_by'];
+            }
+
+            $inspection = null;
+            $statusSql = 'SELECT assigned_status, assigned_remarks, completion_date, assigned_updated_at, assigned_reported_by, assigned_id, room_id FROM tblassignedstatus WHERE room_id = ? AND completion_date = CURDATE()';
+            $statusParams = [$room_id];
+            if ($assigned_id) {
+                $statusSql .= ' AND assigned_id = ?';
+                $statusParams[] = $assigned_id;
+            }
+            if ($reported_by) {
+                $statusSql .= ' AND assigned_reported_by = ?';
+                $statusParams[] = $reported_by;
+            }
+            $statusSql .= ' ORDER BY assigned_updated_at DESC LIMIT 1';
+            $statusStmt = $this->conn->prepare($statusSql);
+            $statusStmt->execute($statusParams);
+            $inspectionRow = $statusStmt->fetch(PDO::FETCH_ASSOC);
+            if ($inspectionRow) {
+                $inspection = $inspectionRow;
+            }
+
+            if ($reported_by) {
+                $stmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_name, c.checklist_room_id, o.operation_id, o.operation_is_functional, o.operation_updated_at, o.operation_updated_by FROM tblroomchecklist c LEFT JOIN (SELECT ao1.operation_id, ao1.operation_is_functional, ao1.operation_updated_at, ao1.operation_updated_by, ao1.operation_room_id, ao1.operation_checklist_id FROM tblassignedoperation ao1 INNER JOIN (SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at FROM tblassignedoperation WHERE operation_updated_by = ? GROUP BY operation_room_id, operation_checklist_id) ao2 ON ao2.operation_room_id = ao1.operation_room_id AND ao2.operation_checklist_id = ao1.operation_checklist_id AND ao2.max_updated_at = ao1.operation_updated_at WHERE ao1.operation_updated_by = ?) o ON o.operation_room_id = c.checklist_room_id AND o.operation_checklist_id = c.checklist_id WHERE c.checklist_room_id = ? ORDER BY c.checklist_name ASC');
+                $stmt->execute([$reported_by, $reported_by, $room_id]);
+            } else {
+                $stmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_name, c.checklist_room_id, o.operation_id, o.operation_is_functional, o.operation_updated_at, o.operation_updated_by FROM tblroomchecklist c LEFT JOIN (SELECT ao1.operation_id, ao1.operation_is_functional, ao1.operation_updated_at, ao1.operation_updated_by, ao1.operation_room_id, ao1.operation_checklist_id FROM tblassignedoperation ao1 INNER JOIN (SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at FROM tblassignedoperation WHERE DATE(operation_updated_at) = CURDATE() GROUP BY operation_room_id, operation_checklist_id) ao2 ON ao2.operation_room_id = ao1.operation_room_id AND ao2.operation_checklist_id = ao1.operation_checklist_id AND ao2.max_updated_at = ao1.operation_updated_at) o ON o.operation_room_id = c.checklist_room_id AND o.operation_checklist_id = c.checklist_id WHERE c.checklist_room_id = ? ORDER BY c.checklist_name ASC');
+                $stmt->execute([$room_id]);
+            }
+
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             return json_encode([
                 'success' => true,
-                'data' => $rows
+                'data' => $rows,
+                'inspection' => $inspection
             ]);
         } catch (PDOException $e) {
             return json_encode([
@@ -735,6 +831,9 @@ $user = new Student($conn);
 switch($operation){
     case 'getCurrentAssignment':
         echo $user->getCurrentAssignment($json);
+        break;
+    case 'getAssignments':
+        echo $user->getAssignments($json);
         break;
     case 'getAssignedRooms':
         echo $user->getAssignedRooms($json);

@@ -776,23 +776,35 @@
                  ]);
              }
 
-             $checkFloor = $this->conn->prepare('SELECT floorbuilding_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
+             $checkFloor = $this->conn->prepare('SELECT floorbuilding_id, floor_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
              $checkFloor->execute([$room_building_floor_id]);
-             if (!$checkFloor->fetch(PDO::FETCH_ASSOC)) {
+             $floorData = $checkFloor->fetch(PDO::FETCH_ASSOC);
+             if (!$floorData) {
                  return json_encode([
                      'success' => false,
                      'message' => 'Building floor not found.'
                  ]);
              }
 
-             $check = $this->conn->prepare('SELECT room_id FROM tblroom WHERE room_building_floor_id = ? AND LOWER(room_number) = LOWER(?)');
-             $check->execute([$room_building_floor_id, $room_number]);
-             if ($check->fetch(PDO::FETCH_ASSOC)) {
-                 return json_encode([
-                     'success' => false,
-                     'message' => 'Room number already exists for this floor.'
-                 ]);
-             }
+             $floor_id = $floorData['floor_id'];
+
+             // Check if room number already exists on the same floor across all buildings
+             $check = $this->conn->prepare('
+                SELECT r.room_number, b.building_name, f.floor_name
+                FROM tblroom r 
+                JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id 
+                JOIN tblbuilding b ON b.building_id = bf.building_id
+                JOIN tblfloor f ON f.floor_id = bf.floor_id
+                WHERE bf.floor_id = ? AND LOWER(r.room_number) = LOWER(?)
+            ');
+            $check->execute([$floor_id, $room_number]);
+            $existingRoom = $check->fetch(PDO::FETCH_ASSOC);
+            if ($existingRoom) {
+                return json_encode([
+                    'success' => false,
+                    'message' => "Room number '{$room_number}' already exists on {$existingRoom['floor_name']} in {$existingRoom['building_name']}."
+                ]);
+            }
 
              $stmt = $this->conn->prepare('INSERT INTO tblroom (room_number, room_building_floor_id) VALUES (?, ?)');
              $stmt->execute([$room_number, $room_building_floor_id]);
@@ -842,23 +854,35 @@
                  ]);
              }
 
-             $checkFloor = $this->conn->prepare('SELECT floorbuilding_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
+             $checkFloor = $this->conn->prepare('SELECT floorbuilding_id, floor_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
              $checkFloor->execute([$room_building_floor_id]);
-             if (!$checkFloor->fetch(PDO::FETCH_ASSOC)) {
+             $floorData = $checkFloor->fetch(PDO::FETCH_ASSOC);
+             if (!$floorData) {
                  return json_encode([
                      'success' => false,
                      'message' => 'Building floor not found.'
                  ]);
              }
 
-             $check = $this->conn->prepare('SELECT room_id FROM tblroom WHERE room_building_floor_id = ? AND LOWER(room_number) = LOWER(?) AND room_id <> ?');
-             $check->execute([$room_building_floor_id, $room_number, $room_id]);
-             if ($check->fetch(PDO::FETCH_ASSOC)) {
-                 return json_encode([
-                     'success' => false,
-                     'message' => 'Room number already exists for this floor.'
-                 ]);
-             }
+             $floor_id = $floorData['floor_id'];
+
+             // Check if room number already exists on the same floor across all buildings (excluding current room)
+             $check = $this->conn->prepare('
+                SELECT r.room_number, b.building_name, f.floor_name
+                FROM tblroom r 
+                JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id 
+                JOIN tblbuilding b ON b.building_id = bf.building_id
+                JOIN tblfloor f ON f.floor_id = bf.floor_id
+                WHERE bf.floor_id = ? AND LOWER(r.room_number) = LOWER(?) AND r.room_id <> ?
+            ');
+            $check->execute([$floor_id, $room_number, $room_id]);
+            $existingRoom = $check->fetch(PDO::FETCH_ASSOC);
+            if ($existingRoom) {
+                return json_encode([
+                    'success' => false,
+                    'message' => "Room number '{$room_number}' already exists on {$existingRoom['floor_name']} in {$existingRoom['building_name']}."
+                ]);
+            }
 
              $stmt = $this->conn->prepare('UPDATE tblroom SET room_building_floor_id = ?, room_number = ? WHERE room_id = ?');
              $stmt->execute([$room_building_floor_id, $room_number, $room_id]);
@@ -999,14 +1023,17 @@
                 ]);
             }
 
-            $checkFloor = $this->conn->prepare('SELECT floorbuilding_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
+            $checkFloor = $this->conn->prepare('SELECT floorbuilding_id, floor_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
             $checkFloor->execute([$room_building_floor_id]);
-            if (!$checkFloor->fetch(PDO::FETCH_ASSOC)) {
+            $floorData = $checkFloor->fetch(PDO::FETCH_ASSOC);
+            if (!$floorData) {
                 return json_encode([
                     'success' => false,
                     'message' => 'Building floor not found.'
                 ]);
             }
+
+            $floor_id = $floorData['floor_id'];
 
             $normalized = [];
             foreach ($room_numbers as $rn) {
@@ -1023,19 +1050,37 @@
 
             $this->conn->beginTransaction();
 
-            $inserted = 0;
-            $skipped = [];
+            $duplicates = [];
+            $check = $this->conn->prepare('
+                SELECT r.room_number, b.building_name, f.floor_name
+                FROM tblroom r 
+                JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id 
+                JOIN tblbuilding b ON b.building_id = bf.building_id
+                JOIN tblfloor f ON f.floor_id = bf.floor_id
+                WHERE bf.floor_id = ? AND LOWER(r.room_number) = LOWER(?)
+            ');
 
-            $check = $this->conn->prepare('SELECT room_id FROM tblroom WHERE room_building_floor_id = ? AND LOWER(room_number) = LOWER(?)');
+            // Check for duplicates first and return error if any found
+            foreach ($normalized as $val) {
+                $check->execute([$floor_id, $val]);
+                $existingRoom = $check->fetch(PDO::FETCH_ASSOC);
+                if ($existingRoom) {
+                    $duplicates[] = "Room number '{$val}' already exists on {$existingRoom['floor_name']} in {$existingRoom['building_name']}.";
+                }
+            }
+
+            if (!empty($duplicates)) {
+                return json_encode([
+                    'success' => false,
+                    'message' => implode(' ', $duplicates)
+                ]);
+            }
+
+            // Insert all rooms since no duplicates found
             $ins = $this->conn->prepare('INSERT INTO tblroom (room_number, room_building_floor_id) VALUES (?, ?)');
+            $inserted = 0;
 
             foreach ($normalized as $val) {
-                $check->execute([$room_building_floor_id, $val]);
-                if ($check->fetch(PDO::FETCH_ASSOC)) {
-                    $skipped[] = $val;
-                    continue;
-                }
-
                 $ins->execute([$val, $room_building_floor_id]);
                 $inserted++;
             }
@@ -1045,8 +1090,7 @@
             return json_encode([
                 'success' => true,
                 'message' => 'Rooms created successfully',
-                'inserted' => $inserted,
-                'skipped' => $skipped
+                'inserted' => $inserted
             ]);
         } catch (PDOException $e) {
             if ($this->conn->inTransaction()) {
@@ -1359,12 +1403,12 @@
              if (is_array($data) && isset($data['assigned_user_id']) && $data['assigned_user_id'] !== '') {
                  $assigned_user_id = (int)$data['assigned_user_id'];
              }
-
+ 
              if ($assigned_user_id) {
-                 $stmt = $this->conn->prepare('SELECT a.assigned_id, a.assigned_user_id, u.full_name AS assigned_user_name, a.assigned_floor_building_id, b.building_name, f.floor_name, a.assigned_start_date, a.assigned_end_date, a.assigned_by_user_id, a.assigned_created_at FROM tblassigned a JOIN tbluser u ON u.user_id = a.assigned_user_id JOIN tblbuildingfloor bf ON bf.floorbuilding_id = a.assigned_floor_building_id JOIN tblbuilding b ON b.building_id = bf.building_id JOIN tblfloor f ON f.floor_id = bf.floor_id WHERE a.assigned_user_id = ? ORDER BY a.assigned_created_at DESC');
+                 $stmt = $this->conn->prepare('SELECT a.assigned_id, a.assigned_user_id, u.full_name AS assigned_user_name, a.assigned_floor_building_id, bf.building_id, bf.floor_id, b.building_name, f.floor_name, a.assigned_start_date, a.assigned_end_date, a.assigned_status_enum, a.assigned_by_user_id, a.assigned_created_at FROM tblassigned a JOIN tbluser u ON u.user_id = a.assigned_user_id JOIN tblbuildingfloor bf ON bf.floorbuilding_id = a.assigned_floor_building_id JOIN tblbuilding b ON b.building_id = bf.building_id JOIN tblfloor f ON f.floor_id = bf.floor_id WHERE a.assigned_user_id = ? ORDER BY a.assigned_created_at DESC');
                  $stmt->execute([$assigned_user_id]);
              } else {
-                 $stmt = $this->conn->prepare('SELECT a.assigned_id, a.assigned_user_id, u.full_name AS assigned_user_name, a.assigned_floor_building_id, b.building_name, f.floor_name, a.assigned_start_date, a.assigned_end_date, a.assigned_by_user_id, a.assigned_created_at FROM tblassigned a JOIN tbluser u ON u.user_id = a.assigned_user_id JOIN tblbuildingfloor bf ON bf.floorbuilding_id = a.assigned_floor_building_id JOIN tblbuilding b ON b.building_id = bf.building_id JOIN tblfloor f ON f.floor_id = bf.floor_id ORDER BY a.assigned_created_at DESC');
+                 $stmt = $this->conn->prepare('SELECT a.assigned_id, a.assigned_user_id, u.full_name AS assigned_user_name, a.assigned_floor_building_id, bf.building_id, bf.floor_id, b.building_name, f.floor_name, a.assigned_start_date, a.assigned_end_date, a.assigned_status_enum, a.assigned_by_user_id, a.assigned_created_at FROM tblassigned a JOIN tbluser u ON u.user_id = a.assigned_user_id JOIN tblbuildingfloor bf ON bf.floorbuilding_id = a.assigned_floor_building_id JOIN tblbuilding b ON b.building_id = bf.building_id JOIN tblfloor f ON f.floor_id = bf.floor_id ORDER BY a.assigned_created_at DESC');
                  $stmt->execute();
              }
 
@@ -1395,6 +1439,7 @@
              $assigned_by_user_id = (int)$data['assigned_by_user_id'];
              $assigned_start_date = trim((string)$data['assigned_start_date']);
              $assigned_end_date = trim((string)$data['assigned_end_date']);
+             $assigned_status_enum = isset($data['assigned_status_enum']) ? trim((string)$data['assigned_status_enum']) : 'active';
 
              if ($assigned_user_id <= 0) {
                  return json_encode([
@@ -1436,6 +1481,17 @@
                  ]);
              }
 
+             $allowedStatuses = ['active', 'completed', 'inactive'];
+             if ($assigned_status_enum === '') {
+                 $assigned_status_enum = 'active';
+             }
+             if (!in_array($assigned_status_enum, $allowedStatuses, true)) {
+                 return json_encode([
+                     'success' => false,
+                     'message' => 'Invalid assigned_status_enum. Allowed values: active, completed, inactive.'
+                 ]);
+             }
+
              $checkUser = $this->conn->prepare('SELECT user_id FROM tbluser WHERE user_id = ?');
              $checkUser->execute([$assigned_user_id]);
              if (!$checkUser->fetch(PDO::FETCH_ASSOC)) {
@@ -1454,13 +1510,163 @@
                  ]);
              }
 
-             $stmt = $this->conn->prepare('INSERT INTO tblassigned (assigned_user_id, assigned_floor_building_id, assigned_start_date, assigned_end_date, assigned_by_user_id, assigned_created_at) VALUES (?, ?, ?, ?, ?, NOW())');
-             $stmt->execute([$assigned_user_id, $assigned_floor_building_id, $assigned_start_date, $assigned_end_date, $assigned_by_user_id]);
+             $stmt = $this->conn->prepare('INSERT INTO tblassigned (assigned_user_id, assigned_floor_building_id, assigned_start_date, assigned_end_date, assigned_status_enum, assigned_by_user_id, assigned_created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())');
+             $stmt->execute([$assigned_user_id, $assigned_floor_building_id, $assigned_start_date, $assigned_end_date, $assigned_status_enum, $assigned_by_user_id]);
 
              return json_encode([
                  'success' => true,
                  'message' => 'Assignment created successfully',
                  'assigned_id' => $this->conn->lastInsertId()
+             ]);
+         } catch (PDOException $e) {
+             return json_encode([
+                 'success' => false,
+                 'message' => 'Database error: ' . $e->getMessage()
+             ]);
+         }
+     }
+
+     public function updateAssigned($data) {
+         try {
+             if (!is_array($data) || !isset($data['assigned_id'])) {
+                 return json_encode([
+                     'success' => false,
+                     'message' => 'Missing required field: assigned_id'
+                 ]);
+             }
+
+             $assigned_id = (int)$data['assigned_id'];
+             if ($assigned_id <= 0) {
+                 return json_encode([
+                     'success' => false,
+                     'message' => 'Invalid assigned_id.'
+                 ]);
+             }
+
+             $fields = [];
+             $params = [];
+
+             if (isset($data['assigned_floor_building_id'])) {
+                 $assigned_floor_building_id = (int)$data['assigned_floor_building_id'];
+                 if ($assigned_floor_building_id <= 0) {
+                     return json_encode([
+                         'success' => false,
+                         'message' => 'Invalid assigned_floor_building_id.'
+                     ]);
+                 }
+
+                 $checkFloor = $this->conn->prepare('SELECT floorbuilding_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
+                 $checkFloor->execute([$assigned_floor_building_id]);
+                 if (!$checkFloor->fetch(PDO::FETCH_ASSOC)) {
+                     return json_encode([
+                         'success' => false,
+                         'message' => 'Building floor not found.'
+                     ]);
+                 }
+
+                 $fields[] = 'assigned_floor_building_id = ?';
+                 $params[] = $assigned_floor_building_id;
+             }
+
+             if (isset($data['assigned_start_date'])) {
+                 $assigned_start_date = trim((string)$data['assigned_start_date']);
+                 if ($assigned_start_date === '') {
+                     return json_encode([
+                         'success' => false,
+                         'message' => 'assigned_start_date cannot be empty.'
+                     ]);
+                 }
+                 $startTs = strtotime($assigned_start_date);
+                 if ($startTs === false) {
+                     return json_encode([
+                         'success' => false,
+                         'message' => 'Invalid assigned_start_date format.'
+                     ]);
+                 }
+                 $fields[] = 'assigned_start_date = ?';
+                 $params[] = $assigned_start_date;
+             }
+
+             if (isset($data['assigned_end_date'])) {
+                 $assigned_end_date = trim((string)$data['assigned_end_date']);
+                 if ($assigned_end_date === '') {
+                     return json_encode([
+                         'success' => false,
+                         'message' => 'assigned_end_date cannot be empty.'
+                     ]);
+                 }
+                 $endTs = strtotime($assigned_end_date);
+                 if ($endTs === false) {
+                     return json_encode([
+                         'success' => false,
+                         'message' => 'Invalid assigned_end_date format.'
+                     ]);
+                 }
+                 $fields[] = 'assigned_end_date = ?';
+                 $params[] = $assigned_end_date;
+             }
+
+             if (isset($data['assigned_status_enum'])) {
+                 $assigned_status_enum = trim((string)$data['assigned_status_enum']);
+                 $allowedStatuses = ['active', 'completed', 'inactive'];
+                 if (!in_array($assigned_status_enum, $allowedStatuses, true)) {
+                     return json_encode([
+                         'success' => false,
+                         'message' => 'Invalid assigned_status_enum. Allowed values: active, completed, inactive.'
+                     ]);
+                 }
+                 $fields[] = 'assigned_status_enum = ?';
+                 $params[] = $assigned_status_enum;
+             }
+
+             if (count($fields) === 0) {
+                 return json_encode([
+                     'success' => false,
+                     'message' => 'No allowed fields provided to update.'
+                 ]);
+             }
+
+             $startToCheck = isset($data['assigned_start_date']) ? trim((string)$data['assigned_start_date']) : null;
+             $endToCheck = isset($data['assigned_end_date']) ? trim((string)$data['assigned_end_date']) : null;
+             if ($startToCheck === null || $endToCheck === null) {
+                 $current = $this->conn->prepare('SELECT assigned_start_date, assigned_end_date FROM tblassigned WHERE assigned_id = ?');
+                 $current->execute([$assigned_id]);
+                 $curRow = $current->fetch(PDO::FETCH_ASSOC);
+                 if (!$curRow) {
+                     return json_encode([
+                         'success' => false,
+                         'message' => 'Assignment not found.'
+                     ]);
+                 }
+                 if ($startToCheck === null) $startToCheck = $curRow['assigned_start_date'] ?? null;
+                 if ($endToCheck === null) $endToCheck = $curRow['assigned_end_date'] ?? null;
+             }
+
+             if ($startToCheck && $endToCheck) {
+                 $startTs = strtotime($startToCheck);
+                 $endTs = strtotime($endToCheck);
+                 if ($startTs === false || $endTs === false) {
+                     return json_encode([
+                         'success' => false,
+                         'message' => 'Invalid date format.'
+                     ]);
+                 }
+                 if ($endTs < $startTs) {
+                     return json_encode([
+                         'success' => false,
+                         'message' => 'End date cannot be earlier than start date.'
+                     ]);
+                 }
+             }
+
+             $params[] = $assigned_id;
+             $sql = 'UPDATE tblassigned SET ' . implode(', ', $fields) . ' WHERE assigned_id = ?';
+             $stmt = $this->conn->prepare($sql);
+             $stmt->execute($params);
+
+             return json_encode([
+                 'success' => true,
+                 'message' => 'Assignment updated successfully'
              ]);
          } catch (PDOException $e) {
              return json_encode([
@@ -1888,6 +2094,9 @@
          break;
      case 'createAssigned':
          echo $user->createAssigned($json);
+         break;
+     case 'updateAssigned':
+         echo $user->updateAssigned($json);
          break;
      case 'getRoomChecklists':
          echo $user->getRoomChecklists($json);

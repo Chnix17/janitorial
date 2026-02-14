@@ -211,7 +211,7 @@ export default function Login() {
         if (role.includes('admin')) {
           navigate('/admin');
         } else if (role.includes('student')) {
-          navigate('/student/dashboard');
+          navigate('/student/assignments');
         } else {
           navigate('/login');
         }

@@ -30,6 +30,9 @@ const Icons = {
   ChevronDown: () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
   ),
+  ChevronUp: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+  ),
   ChevronRight: () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   ),
@@ -84,6 +87,7 @@ export default function Activity() {
   const [modalLoading, setModalLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'calendar' | 'list'
   const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [expandedChecklist, setExpandedChecklist] = useState(null);
 
   const baseUrl = useMemo(() => {
     const storedUrl = SecureStorage.getLocalItem('janitorial_url');
@@ -102,35 +106,30 @@ export default function Activity() {
     const loadData = async () => {
       setLoading(true);
       try {
-        // Load both history and assignments
-        const [historyRes, assignmentsRes] = await Promise.all([
-          axios.post(
-            `${baseUrl}student.php`,
-            { operation: 'getInspectionHistory', json: { user_id: userId } },
-            { headers: { 'Content-Type': 'application/json' } }
-          ),
-          axios.post(
-            `${baseUrl}student.php`,
-            { operation: 'getMyAssignments', json: { user_id: userId } },
-            { headers: { 'Content-Type': 'application/json' } }
-          )
-        ]);
+        // Load inspection history (which includes assignments)
+        const historyRes = await axios.post(
+          `${baseUrl}student.php`,
+          { operation: 'getInspectionHistory', json: { user_id: userId } },
+          { headers: { 'Content-Type': 'application/json' } }
+        );
 
         if (historyRes?.data?.success) {
+          // Set inspection history
           setHistory(Array.isArray(historyRes.data.data) ? historyRes.data.data : []);
-        }
-
-        if (assignmentsRes?.data?.success) {
-          // Handle both "assignments" and "data" keys from API response
-          const assignmentData = Array.isArray(assignmentsRes.data.assignments) 
-            ? assignmentsRes.data.assignments 
-            : Array.isArray(assignmentsRes.data.data)
-            ? assignmentsRes.data.data
+          
+          // Set assignments from the same response
+          const assignmentData = Array.isArray(historyRes.data.assignments) 
+            ? historyRes.data.assignments 
             : [];
           setAssignments(assignmentData);
+          
           // Select the most recent assignment by default
           if (assignmentData.length > 0) {
-            setSelectedAssignment(assignmentData[0]);
+            const nowYmd = ymd(new Date());
+            const active = assignmentData.find((a) => nowYmd >= normalizeYmd(a?.assigned_start_date) && nowYmd <= normalizeYmd(a?.assigned_end_date));
+            const started = assignmentData.find((a) => nowYmd >= normalizeYmd(a?.assigned_start_date));
+            const chosen = active || started || null;
+            setSelectedAssignment(chosen);
           }
         }
       } catch (e) {
@@ -144,6 +143,7 @@ export default function Activity() {
   }, [userId, baseUrl]);
 
   const today = new Date();
+  const todayYmdNow = useMemo(() => ymd(new Date()), []);
   const todayYmd = useMemo(() => ymd(new Date()), []);
 
   // Create a lookup map for quick date access
@@ -212,6 +212,34 @@ export default function Activity() {
     return `${year}-${month}-${day}`;
   }
 
+  const normalizeYmd = (val) => {
+    if (!val) return '';
+    const s = String(val);
+    const m = s.match(/^\d{4}-\d{2}-\d{2}/);
+    return m ? m[0] : s;
+  };
+
+  const assignmentRanges = useMemo(() => {
+    if (!Array.isArray(assignments)) return [];
+    return assignments
+      .map((a) => {
+        const start = normalizeYmd(a?.assigned_start_date);
+        const end = normalizeYmd(a?.assigned_end_date);
+        return {
+          ...a,
+          _rangeStart: start,
+          _rangeEnd: end
+        };
+      })
+      .filter((a) => a?._rangeStart && a?._rangeEnd && a._rangeStart <= a._rangeEnd);
+  }, [assignments]);
+
+  const selectedRange = useMemo(() => {
+    if (!selectedAssignment?.assigned_id) return null;
+    const id = Number(selectedAssignment.assigned_id);
+    return assignmentRanges.find((a) => Number(a.assigned_id) === id) || null;
+  }, [assignmentRanges, selectedAssignment]);
+
   const startOfWeek = (date) => {
     const d = new Date(date);
     if (Number.isNaN(d.getTime())) return null;
@@ -229,15 +257,27 @@ export default function Activity() {
   };
 
   const dailyRows = useMemo(() => {
+    const startStr = selectedRange?._rangeStart || null;
+    const endStr = selectedRange?._rangeEnd || null;
+
     const rows = (Array.isArray(history) ? history : [])
-      .map((h) => ({
-        date: h.date,
-        count: Number(h.count) || 0
-      }))
+      .map((h) => {
+        const date = normalizeYmd(h?.date);
+        return {
+          date,
+          count: Number(h?.count) || 0
+        };
+      })
       .filter((r) => !!r.date)
+      .filter((r) => {
+        if (!startStr || !endStr) return true;
+        return r.date >= startStr && r.date <= endStr;
+      })
+      .filter((r) => r.count > 0)
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
     return rows;
-  }, [history]);
+  }, [history, selectedRange]);
 
   const weeklyGroups = useMemo(() => {
     const map = new Map();
@@ -315,6 +355,7 @@ export default function Activity() {
     setModalOpen(false);
     setModalDate(null);
     setModalInspections([]);
+    setExpandedChecklist(null);
   };
 
   const stats = useMemo(() => {
@@ -325,17 +366,17 @@ export default function Activity() {
     
     // Calculate streak
     let currentStreak = 0;
-    const sortedDates = dailyRows.map(r => r.date).sort().reverse();
-    let checkDate = new Date();
-    
-    for (const dateStr of sortedDates) {
+    const checkDate = new Date();
+    checkDate.setHours(0, 0, 0, 0);
+    while (true) {
       const checkStr = ymd(checkDate);
-      if (dateStr === checkStr) {
+      const cnt = historyMap.get(checkStr) || 0;
+      if (cnt > 0) {
         currentStreak++;
         checkDate.setDate(checkDate.getDate() - 1);
-      } else if (dateStr < checkStr) {
-        break;
+        continue;
       }
+      break;
     }
 
     return {
@@ -345,18 +386,18 @@ export default function Activity() {
       bestDayCount,
       currentStreak
     };
-  }, [history, dailyRows]);
+  }, [history, historyMap]);
 
   // Get status badge styles
   const getStatusBadge = (status, hasUpdate, isPastDate) => {
     const displayStatus = status || (hasUpdate ? 'Done' : (isPastDate ? 'Missed' : 'Pending'));
     const styles = {
-      'Excellent': 'bg-emerald-100 text-emerald-700 border-emerald-200',
-      'Good': 'bg-sky-100 text-sky-700 border-sky-200',
-      'Fair': 'bg-amber-100 text-amber-700 border-amber-200',
-      'Poor': 'bg-rose-100 text-rose-700 border-rose-200',
-      'Missed': 'bg-rose-100 text-rose-700 border-rose-200',
-      'Pending': 'bg-slate-100 text-slate-600 border-slate-200',
+      'excellent': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      'good': 'bg-sky-100 text-sky-700 border-sky-200',
+      'fair': 'bg-amber-100 text-amber-700 border-amber-200',
+      'poor': 'bg-rose-100 text-rose-700 border-rose-200',
+      'missed': 'bg-rose-100 text-rose-700 border-rose-200',
+      'pending': 'bg-slate-100 text-slate-600 border-slate-200',
       'Done': 'bg-emerald-100 text-emerald-700 border-emerald-200'
     };
     return { displayStatus, badgeClass: styles[displayStatus] || styles['Pending'] };
@@ -364,9 +405,8 @@ export default function Activity() {
 
   // Check if a date is within assignment range
   const isDateInAssignment = (dateStr) => {
-    if (!selectedAssignment) return false;
-    return dateStr >= selectedAssignment.assigned_start_date && 
-           dateStr <= selectedAssignment.assigned_end_date;
+    if (!selectedRange) return false;
+    return dateStr >= selectedRange._rangeStart && dateStr <= selectedRange._rangeEnd;
   };
 
   // Custom calendar tile class for assignment range
@@ -382,9 +422,9 @@ export default function Activity() {
     }
     
     // Highlight assignment range
-    if (selectedAssignment) {
-      const startStr = selectedAssignment.assigned_start_date;
-      const endStr = selectedAssignment.assigned_end_date;
+    if (selectedRange) {
+      const startStr = selectedRange._rangeStart;
+      const endStr = selectedRange._rangeEnd;
       
       if (dateStr >= startStr && dateStr <= endStr) {
         classes.push('in-assignment-range');
@@ -403,18 +443,12 @@ export default function Activity() {
   return (
     <div className="activity-page">
       {/* Header Section */}
-      <div className="activity-header">
-        <div className="header-content">
-          <div className="header-title">
-            <div className="title-icon">
-              <Icons.Activity />
-            </div>
-            <div>
-              <h1>Activity Dashboard</h1>
-              <p>Track your inspection progress and performance</p>
-            </div>
-          </div>
-        </div>
+          <div>
+
+        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Activity</h1>
+
+        <p className="mt-1 text-sm text-slate-500">Track your inspection progress and performance</p>
+
       </div>
 
       {/* Assignment Overview Card */}
@@ -430,38 +464,22 @@ export default function Activity() {
                 className="assignment-select-clean"
                 value={selectedAssignment?.assigned_id || ''}
                 onChange={(e) => {
-                  const assignment = assignments.find(a => a.assigned_id === Number(e.target.value));
+                  const nextId = Number(e.target.value);
+                  const assignment = assignments.find((a) => Number(a.assigned_id) === nextId);
                   setSelectedAssignment(assignment);
                 }}
               >
                 {assignments.map((a, idx) => (
-                  <option key={a.assigned_id} value={a.assigned_id}>
-                    Assignment #{idx + 1}: {fmtDate(a.assigned_start_date)} - {fmtDate(a.assigned_end_date)}
+                  <option
+                    key={a.assigned_id}
+                    value={a.assigned_id}
+                    disabled={todayYmdNow < normalizeYmd(a.assigned_start_date)}
+                  >
+                    Assignment #{idx + 1}: {fmtDate(a.assigned_start_date)} - {fmtDate(a.assigned_end_date)}{todayYmdNow < normalizeYmd(a.assigned_start_date) ? ' - Not started yet' : ''}
                   </option>
                 ))}
               </select>
             )}
-          </div>
-
-          <div className="assignment-date-range">
-            <div className="date-pill start">
-              <Icons.Play />
-              <div>
-                <label>Start Date</label>
-                <span>{fmtDate(selectedAssignment.assigned_start_date)}</span>
-              </div>
-            </div>
-            <div className="date-connector">
-              <div className="connector-line" />
-              <span className="duration-badge">{assignmentProgress.totalDays} days</span>
-            </div>
-            <div className="date-pill end">
-              <Icons.Flag />
-              <div>
-                <label>End Date</label>
-                <span>{fmtDate(selectedAssignment.assigned_end_date)}</span>
-              </div>
-            </div>
           </div>
 
           {/* Progress Bar */}
@@ -538,59 +556,6 @@ export default function Activity() {
         </div>
       )}
 
-      {/* Stats Grid */}
-      <div className="stats-grid">
-        <div className="stat-card primary">
-          <div className="stat-icon">
-            <Icons.CheckCircle />
-          </div>
-          <div className="stat-content">
-            <span className="stat-label">Total Inspections</span>
-            <span className="stat-value">{loading ? '—' : stats.total}</span>
-          </div>
-        </div>
-        
-        <div className="stat-card success">
-          <div className="stat-icon">
-            <Icons.Calendar />
-          </div>
-          <div className="stat-content">
-            <span className="stat-label">Active Days</span>
-            <span className="stat-value">{loading ? '—' : stats.activeDays}</span>
-          </div>
-        </div>
-        
-        <div className="stat-card info">
-          <div className="stat-icon">
-            <Icons.TrendingUp />
-          </div>
-          <div className="stat-content">
-            <span className="stat-label">Daily Average</span>
-            <span className="stat-value">{loading ? '—' : stats.avgPerDay.toFixed(1)}</span>
-          </div>
-        </div>
-        
-        <div className="stat-card warning">
-          <div className="stat-icon">
-            <Icons.Award />
-          </div>
-          <div className="stat-content">
-            <span className="stat-label">Best Day</span>
-            <span className="stat-value">{loading ? '—' : stats.bestDayCount}</span>
-          </div>
-        </div>
-
-        <div className="stat-card accent">
-          <div className="stat-icon">
-            <Icons.Target />
-          </div>
-          <div className="stat-content">
-            <span className="stat-label">Current Streak</span>
-            <span className="stat-value">{loading ? '—' : `${stats.currentStreak} days`}</span>
-          </div>
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="main-content">
         {/* Tab Navigation */}
@@ -637,14 +602,16 @@ export default function Activity() {
                       if (view !== 'month') return null;
                       const dateStr = ymd(date);
                       const count = historyMap.get(dateStr);
-                      const isStart = selectedAssignment && dateStr === selectedAssignment.assigned_start_date;
-                      const isEnd = selectedAssignment && dateStr === selectedAssignment.assigned_end_date;
+                      const isStart = selectedRange && dateStr === selectedRange._rangeStart;
+                      const isEnd = selectedRange && dateStr === selectedRange._rangeEnd;
                       
                       return (
                         <>
                           {count > 0 && <span className="calendar-badge-mini">{count}</span>}
                           {isStart && <span className="assignment-marker-mini start" title="Start">▶</span>}
                           {isEnd && <span className="assignment-marker-mini end" title="End">🏁</span>}
+                          {isStart && <span className="assignment-label start">START</span>}
+                          {isEnd && <span className="assignment-label end">END</span>}
                         </>
                       );
                     }}
@@ -673,9 +640,7 @@ export default function Activity() {
                     </div>
                   ) : (
                     dailyRows.slice(0, 5).map((r) => {
-                      const isInAssignment = selectedAssignment && 
-                        r.date >= selectedAssignment.assigned_start_date && 
-                        r.date <= selectedAssignment.assigned_end_date;
+                      const isInAssignment = isDateInAssignment(r.date);
                       
                       return (
                         <button
@@ -749,13 +714,15 @@ export default function Activity() {
                     if (view !== 'month') return null;
                     const dateStr = ymd(date);
                     const count = historyMap.get(dateStr);
-                    const isStart = selectedAssignment && dateStr === selectedAssignment.assigned_start_date;
-                    const isEnd = selectedAssignment && dateStr === selectedAssignment.assigned_end_date;
+                    const isStart = selectedRange && dateStr === selectedRange._rangeStart;
+                    const isEnd = selectedRange && dateStr === selectedRange._rangeEnd;
                     const inRange = isDateInAssignment(dateStr);
                     
                     return (
                       <>
                         {count > 0 && <span className="calendar-badge">{count}</span>}
+                        {isStart && <span className="assignment-label start">START</span>}
+                        {isEnd && <span className="assignment-label end">END</span>}
                         {isStart && (
                           <span className="assignment-marker start" title="Assignment Start">
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
@@ -822,9 +789,7 @@ export default function Activity() {
                 ) : (
                   <div className="activity-list">
                     {dailyRows.slice(0, 60).map((r) => {
-                      const isInAssignment = selectedAssignment && 
-                        r.date >= selectedAssignment.assigned_start_date && 
-                        r.date <= selectedAssignment.assigned_end_date;
+                      const isInAssignment = isDateInAssignment(r.date);
                       
                       return (
                         <button
@@ -856,10 +821,7 @@ export default function Activity() {
                   <div className="activity-list grouped">
                     {weeklyGroups.slice(0, 26).map((g) => {
                       const isOpen = expandedKey === g.key;
-                      const hasAssignmentDays = selectedAssignment && g.days.some(d => 
-                        d.date >= selectedAssignment.assigned_start_date && 
-                        d.date <= selectedAssignment.assigned_end_date
-                      );
+                      const hasAssignmentDays = g.days.some((d) => isDateInAssignment(d.date));
                       
                       return (
                         <div key={g.key} className="group-container">
@@ -882,9 +844,7 @@ export default function Activity() {
                           {isOpen && (
                             <div className="group-children">
                               {g.days.map((d) => {
-                                const isInAssignment = selectedAssignment && 
-                                  d.date >= selectedAssignment.assigned_start_date && 
-                                  d.date <= selectedAssignment.assigned_end_date;
+                                const isInAssignment = isDateInAssignment(d.date);
                                 
                                 return (
                                   <button
@@ -920,10 +880,7 @@ export default function Activity() {
                   <div className="activity-list grouped">
                     {monthlyGroups.slice(0, 12).map((g) => {
                       const isOpen = expandedKey === g.key;
-                      const hasAssignmentDays = selectedAssignment && g.days.some(d => 
-                        d.date >= selectedAssignment.assigned_start_date && 
-                        d.date <= selectedAssignment.assigned_end_date
-                      );
+                      const hasAssignmentDays = g.days.some((d) => isDateInAssignment(d.date));
                       
                       return (
                         <div key={g.key} className="group-container">
@@ -946,9 +903,7 @@ export default function Activity() {
                           {isOpen && (
                             <div className="group-children">
                               {g.days.map((d) => {
-                                const isInAssignment = selectedAssignment && 
-                                  d.date >= selectedAssignment.assigned_start_date && 
-                                  d.date <= selectedAssignment.assigned_end_date;
+                                const isInAssignment = isDateInAssignment(d.date);
                                 
                                 return (
                                   <button
@@ -1020,6 +975,8 @@ export default function Activity() {
                     const hasUpdate = !!insp.assigned_updated_at;
                     const isPastDate = String(modalDate || '') < String(todayYmd);
                     const { displayStatus, badgeClass } = getStatusBadge(insp.assigned_status, hasUpdate, isPastDate);
+                    const hasChecklist = Array.isArray(insp.checklist) && insp.checklist.length > 0;
+                    const isChecklistOpen = expandedChecklist === i;
                     
                     return (
                       <div key={i} className="inspection-card">
@@ -1031,8 +988,33 @@ export default function Activity() {
                               {insp.building_name}{insp.floor_name ? ` • ${insp.floor_name}` : ''}
                             </span>
                           </div>
-                          <span className={`status-badge ${badgeClass}`}>{displayStatus}</span>
+                          <div className="inspection-actions">
+                            {hasChecklist && (
+                              <button 
+                                className="checklist-toggle-btn"
+                                onClick={() => setExpandedChecklist(isChecklistOpen ? null : i)}
+                                aria-label={isChecklistOpen ? 'Hide checklist' : 'Show checklist'}
+                              >
+                                <span className="checklist-count">{insp.checklist.length} checklist item{insp.checklist.length !== 1 ? 's' : ''}</span>
+                                {isChecklistOpen ? <Icons.ChevronUp /> : <Icons.ChevronDown />}
+                              </button>
+                            )}
+                            <span className={`status-badge ${badgeClass}`}>{displayStatus}</span>
+                          </div>
                         </div>
+                        
+                        {isChecklistOpen && hasChecklist && (
+                          <div className="checklist-dropdown">
+                            {insp.checklist.map((item) => (
+                              <div key={item.checklist_id} className="checklist-item">
+                                <span className="checklist-name">{item.checklist_name}</span>
+                                <span className={`checklist-status ${item.operation_is_functional ? 'ok' : 'not-ok'}`}>
+                                  {item.operation_is_functional ? 'OK' : 'Not OK'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         
                         {insp.assigned_remarks && (
                           <p className="inspection-remarks">{insp.assigned_remarks}</p>

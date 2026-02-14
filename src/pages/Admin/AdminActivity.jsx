@@ -6,15 +6,27 @@ import { toast } from '../../utils/toast';
 
 const withSlash = (base) => (base.endsWith('/') ? base : base + '/');
 
+// Helper: Get current date in Asia/Manila timezone as YYYY-MM-DD
+const getManilaDate = () => {
+  const now = new Date();
+  const manilaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+  const y = manilaTime.getFullYear();
+  const m = String(manilaTime.getMonth() + 1).padStart(2, '0');
+  const d = String(manilaTime.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+// Helper: Check if a date (YYYY-MM-DD) is Sunday in Asia/Manila timezone
+const isSundayInManila = (dateYmd) => {
+  const [year, month, day] = dateYmd.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const manilaTime = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+  return manilaTime.getDay() === 0;
+};
+
 export default function AdminActivity() {
   const [viewMode, setViewMode] = useState('daily');
-  const [date, setDate] = useState(() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  });
+  const [date, setDate] = useState(() => getManilaDate());
 
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
@@ -32,6 +44,14 @@ export default function AdminActivity() {
   const [modalLoading, setModalLoading] = useState(false);
   const [modalInspections, setModalInspections] = useState([]);
 
+  // Pagination state for daily view
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Pagination state for assignment range
+  const [rangeCurrentPage, setRangeCurrentPage] = useState(1);
+  const rangeItemsPerPage = 10;
+
   const baseUrl = useMemo(() => {
     const storedUrl = SecureStorage.getLocalItem('janitorial_url');
     return withSlash(storedUrl || getApiBaseUrl());
@@ -42,6 +62,38 @@ export default function AdminActivity() {
     if (!q) return rows;
     return rows.filter((r) => String(r.full_name || '').toLowerCase().includes(q) || String(r.username || '').toLowerCase().includes(q));
   }, [rows, search]);
+
+  // Pagination logic for daily view
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filtered.slice(startIndex, endIndex);
+  }, [filtered, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, filtered.length);
+
+  // Pagination logic for assignment range
+  const paginatedRangeDays = useMemo(() => {
+    const startIndex = (rangeCurrentPage - 1) * rangeItemsPerPage;
+    const endIndex = startIndex + rangeItemsPerPage;
+    return rangeDays.slice(startIndex, endIndex);
+  }, [rangeDays, rangeCurrentPage, rangeItemsPerPage]);
+
+  const rangeTotalPages = Math.ceil(rangeDays.length / rangeItemsPerPage);
+  const rangeStartItem = (rangeCurrentPage - 1) * rangeItemsPerPage + 1;
+  const rangeEndItem = Math.min(rangeCurrentPage * rangeItemsPerPage, rangeDays.length);
+
+  // Reset page when assignment changes
+  useEffect(() => {
+    setRangeCurrentPage(1);
+  }, [selectedAssignmentId]);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
 
   const stats = useMemo(() => {
     const totalStudents = rows.length;
@@ -86,7 +138,11 @@ export default function AdminActivity() {
     if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return out;
     if (s.getTime() > e.getTime()) return out;
     for (let d = s; d.getTime() <= e.getTime(); d = addDays(d, 1)) {
-      out.push(ymd(d));
+      const dateStr = ymd(d);
+      // Exclude Sundays
+      if (!isSundayInManila(dateStr)) {
+        out.push(dateStr);
+      }
       if (out.length > 370) break;
     }
     return out;
@@ -297,7 +353,7 @@ export default function AdminActivity() {
     setModalInspections([]);
   };
 
-  const todayYmd = useMemo(() => ymd(new Date()), []);
+  const todayYmd = useMemo(() => getManilaDate(), []);
 
   useEffect(() => {
     loadSummary();
@@ -445,7 +501,7 @@ export default function AdminActivity() {
               ) : rangeDays.length === 0 ? (
                 <div className="px-5 py-6 text-sm text-slate-500">No days to show in this range.</div>
               ) : (
-                rangeDays.map((d) => {
+                paginatedRangeDays.map((d) => {
                   const inspected = Number(d.inspected_rooms) || 0;
                   const missed = Number(d.missed_rooms) || 0;
                   const total = Number(d.total_rooms) || 0;
@@ -465,6 +521,38 @@ export default function AdminActivity() {
                 })
               )}
             </div>
+
+            {/* Assignment Range Pagination Controls */}
+            {rangeTotalPages > 1 && (
+              <div className="border-t border-slate-200 bg-slate-50 px-5 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm text-slate-600">
+                    Showing <span className="font-semibold text-slate-900">{rangeStartItem}</span> to <span className="font-semibold text-slate-900">{rangeEndItem}</span> of <span className="font-semibold text-slate-900">{rangeDays.length}</span> days
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRangeCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={rangeCurrentPage === 1}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-3 py-1 text-sm text-slate-600">
+                      Page <span className="font-semibold text-slate-900">{rangeCurrentPage}</span> of <span className="font-semibold text-slate-900">{rangeTotalPages}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setRangeCurrentPage(prev => Math.min(prev + 1, rangeTotalPages))}
+                      disabled={rangeCurrentPage === rangeTotalPages}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </>
       ) : null}
@@ -515,7 +603,7 @@ export default function AdminActivity() {
           </div>
 
           <div className="divide-y divide-slate-100">
-            {filtered.map((r) => {
+            {paginatedData.map((r) => {
               const active = !!r.is_active_on_date;
               return (
                 <button
@@ -528,7 +616,7 @@ export default function AdminActivity() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-slate-900">{r.full_name}</div>
-                        <div className="mt-1 truncate text-xs text-slate-500">@{r.username}</div>
+                 
                         <div className="mt-1 text-xs text-slate-500">Last activity: {r.last_activity_at ? fmtTime(r.last_activity_at) : '—'}</div>
                       </div>
 
@@ -564,6 +652,38 @@ export default function AdminActivity() {
               <div className="px-5 py-6 text-sm text-slate-500">No students found.</div>
             ) : null}
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="border-t border-slate-200 bg-slate-50 px-5 py-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-slate-600">
+                  Showing <span className="font-semibold text-slate-900">{startItem}</span> to <span className="font-semibold text-slate-900">{endItem}</span> of <span className="font-semibold text-slate-900">{filtered.length}</span> students
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span className="px-3 py-1 text-sm text-slate-600">
+                    Page <span className="font-semibold text-slate-900">{currentPage}</span> of <span className="font-semibold text-slate-900">{totalPages}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
         </>

@@ -18,6 +18,7 @@ import AdminFloorNames from './pages/Admin/AdminFloorNames';
 import AdminAssignments from './pages/Admin/AdminAssignments';
 import AdminRoomChecklists from './pages/Admin/AdminRoomChecklists';
 import AdminActivity from './pages/Admin/AdminActivity';
+import AdminReports from './pages/Admin/AdminReports';
 import StudentAssignments from './pages/Student/StudentAssignments';
 import Activity from './pages/Student/Activity';
 import { getApiBaseUrl } from './utils/apiConfig';
@@ -66,6 +67,7 @@ function App() {
             <Route path="floors" element={<AdminFloors />} />
             <Route path="floor-names" element={<AdminFloorNames />} />
             <Route path="assignments" element={<AdminAssignments />} />
+            <Route path="reports" element={<AdminReports />} />
             <Route path="inspections" element={<div>Inspections (coming soon)</div>} />
             <Route path="activity" element={<AdminActivity />} />
           </Route>
@@ -99,6 +101,7 @@ function App() {
             <Route path="floors" element={<AdminFloors />} />
             <Route path="floor-names" element={<AdminFloorNames />} />
             <Route path="assignments" element={<AdminAssignments />} />
+            <Route path="reports" element={<AdminReports />} />
             <Route path="inspections" element={<div>Inspections (coming soon)</div>} />
             <Route path="activity" element={<AdminActivity />} />
           </Route>

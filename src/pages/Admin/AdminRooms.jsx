@@ -170,17 +170,7 @@ export default function AdminRooms() {
         return;
       }
 
-      const existsInClient = rooms.some((r) => {
-        const sameFloor = String(r.room_building_floor_id || r.floorbuilding_id) === String(floorbuilding_id);
-        const sameRoom = String(r.room_number || '').trim().toLowerCase() === room_number.toLowerCase();
-        const notSelf = String(r.room_id) !== String(editing.room_id);
-        return sameFloor && sameRoom && notSelf;
-      });
-
-      if (existsInClient) {
-        toast.error('Room number already exists for this floor.');
-        return;
-      }
+      // Remove client-side duplicate check to let backend provide specific error messages
     } else {
       const split = room_numbers_raw
         .split(/\r?\n|,/g)
@@ -198,16 +188,7 @@ export default function AdminRooms() {
         return;
       }
 
-      const existsAnyInClient = rooms.some((r) => {
-        const sameFloor = String(r.room_building_floor_id || r.floorbuilding_id) === String(floorbuilding_id);
-        if (!sameFloor) return false;
-        return normalized.has(String(r.room_number || '').trim().toLowerCase());
-      });
-
-      if (existsAnyInClient) {
-        toast.error('Some room numbers already exist for this floor.');
-        return;
-      }
+      // Remove client-side duplicate check to let backend provide specific error messages
     }
 
     setLoading(true);

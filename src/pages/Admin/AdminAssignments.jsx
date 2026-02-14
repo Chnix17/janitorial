@@ -19,13 +19,16 @@ export default function AdminAssignments() {
   const [buildingFilter, setBuildingFilter] = useState('all');
 
   const [openModal, setOpenModal] = useState(false);
+  const [modalMode, setModalMode] = useState('create');
 
   const [form, setForm] = useState({
+    assigned_id: '',
     assigned_user_id: '',
     building_id: '',
     assigned_floor_building_id: '',
     assigned_start_date: '',
-    assigned_end_date: ''
+    assigned_end_date: '',
+    assigned_status_enum: 'active'
   });
 
   const baseUrl = useMemo(() => {
@@ -35,22 +38,41 @@ export default function AdminAssignments() {
 
   const resetForm = () => {
     setForm({
+      assigned_id: '',
       assigned_user_id: '',
       building_id: '',
       assigned_floor_building_id: '',
       assigned_start_date: '',
-      assigned_end_date: ''
+      assigned_end_date: '',
+      assigned_status_enum: 'active'
     });
     setFloors([]);
   };
 
   const openCreate = () => {
     resetForm();
+    setModalMode('create');
+    setOpenModal(true);
+  };
+
+  const openEdit = (a) => {
+    resetForm();
+    setModalMode('edit');
+    setForm({
+      assigned_id: a?.assigned_id ?? '',
+      assigned_user_id: a?.assigned_user_id ?? '',
+      building_id: a?.building_id ?? '',
+      assigned_floor_building_id: a?.assigned_floor_building_id ?? '',
+      assigned_start_date: a?.assigned_start_date ? String(a.assigned_start_date).slice(0, 10) : '',
+      assigned_end_date: a?.assigned_end_date ? String(a.assigned_end_date).slice(0, 10) : '',
+      assigned_status_enum: a?.assigned_status_enum || 'active'
+    });
     setOpenModal(true);
   };
 
   const closeModal = () => {
     setOpenModal(false);
+    setModalMode('create');
     resetForm();
   };
 
@@ -141,10 +163,12 @@ export default function AdminAssignments() {
   const submit = async (e) => {
     e.preventDefault();
 
+    const assigned_id = form.assigned_id === '' ? '' : Number(form.assigned_id);
     const assigned_user_id = form.assigned_user_id === '' ? '' : Number(form.assigned_user_id);
     const assigned_floor_building_id = form.assigned_floor_building_id === '' ? '' : Number(form.assigned_floor_building_id);
     const assigned_start_date = String(form.assigned_start_date || '').trim();
     const assigned_end_date = String(form.assigned_end_date || '').trim();
+    const assigned_status_enum = String(form.assigned_status_enum || '').trim();
 
     const assigned_by_user_id = Number(
       SecureStorage.getLocalItem('janitorial_user_id') ||
@@ -152,9 +176,16 @@ export default function AdminAssignments() {
         0
     );
 
-    if (!assigned_user_id) {
-      toast.error('Please select a student.');
-      return;
+    if (modalMode === 'create') {
+      if (!assigned_user_id) {
+        toast.error('Please select a student.');
+        return;
+      }
+    } else {
+      if (!assigned_id) {
+        toast.error('Missing assignment id.');
+        return;
+      }
     }
 
     if (!form.building_id) {
@@ -179,23 +210,33 @@ export default function AdminAssignments() {
 
     setLoading(true);
     try {
+      const operation = modalMode === 'edit' ? 'updateAssigned' : 'createAssigned';
+      const json =
+        modalMode === 'edit'
+          ? {
+              assigned_id,
+              assigned_floor_building_id,
+              assigned_start_date,
+              assigned_end_date,
+              assigned_status_enum
+            }
+          : {
+              assigned_user_id,
+              assigned_floor_building_id,
+              assigned_start_date,
+              assigned_end_date,
+              assigned_status_enum,
+              assigned_by_user_id
+            };
+
       const res = await axios.post(
         `${baseUrl}admin.php`,
-        {
-          operation: 'createAssigned',
-          json: {
-            assigned_user_id,
-            assigned_floor_building_id,
-            assigned_start_date,
-            assigned_end_date,
-            assigned_by_user_id
-          }
-        },
+        { operation, json },
         { headers: { 'Content-Type': 'application/json' } }
       );
 
       if (res?.data?.success) {
-        toast.success('Assignment created.');
+        toast.success(modalMode === 'edit' ? 'Assignment updated.' : 'Assignment created.');
         closeModal();
         await loadAll();
       } else {
@@ -216,14 +257,9 @@ export default function AdminAssignments() {
   };
 
   const getStatus = (a) => {
-    const start = a?.assigned_start_date ? new Date(a.assigned_start_date) : null;
-    const end = a?.assigned_end_date ? new Date(a.assigned_end_date) : null;
-    const now = new Date();
-
-    if (!start || Number.isNaN(start.getTime()) || !end || Number.isNaN(end.getTime())) return 'Unknown';
-    if (now < start) return 'Upcoming';
-    if (now > end) return 'Ended';
-    return 'Active';
+    const s = String(a?.assigned_status_enum || '').toLowerCase();
+    if (s === 'active' || s === 'completed' || s === 'inactive') return s;
+    return 'active';
   };
 
   const filteredAssignments = useMemo(() => {
@@ -231,7 +267,7 @@ export default function AdminAssignments() {
     return assignments
       .filter((a) => {
         if (statusFilter === 'all') return true;
-        return getStatus(a).toLowerCase() === statusFilter;
+        return getStatus(a) === statusFilter;
       })
       .filter((a) => {
         if (buildingFilter === 'all') return true;
@@ -317,8 +353,8 @@ export default function AdminAssignments() {
           >
             <option value="all">All statuses</option>
             <option value="active">Active</option>
-            <option value="upcoming">Upcoming</option>
-            <option value="ended">Ended</option>
+            <option value="completed">Completed</option>
+            <option value="inactive">Inactive</option>
           </select>
 
           <select
@@ -359,7 +395,7 @@ export default function AdminAssignments() {
         >
           <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-base font-semibold text-slate-900">Add Assignment</div>
+              <div className="text-base font-semibold text-slate-900">{modalMode === 'edit' ? 'Edit Assignment' : 'Add Assignment'}</div>
               <button type="button" onClick={closeModal} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100">
                 ✕
               </button>
@@ -371,6 +407,7 @@ export default function AdminAssignments() {
                 <select
                   value={form.assigned_user_id}
                   onChange={(e) => setForm((p) => ({ ...p, assigned_user_id: e.target.value }))}
+                  disabled={modalMode === 'edit'}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                 >
                   <option value="">Select student...</option>
@@ -433,6 +470,19 @@ export default function AdminAssignments() {
                 </label>
               </div>
 
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
+                Status
+                <select
+                  value={form.assigned_status_enum}
+                  onChange={(e) => setForm((p) => ({ ...p, assigned_status_enum: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                >
+                  <option value="active">Active</option>
+                  <option value="completed">Completed</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </label>
+
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
@@ -456,12 +506,13 @@ export default function AdminAssignments() {
       ) : null}
 
       <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-        <div className="grid grid-cols-[1.2fr_1.3fr_1.1fr_.9fr] gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-500 md:grid-cols-[1.2fr_1.3fr_1.1fr_.9fr_1fr]">
+        <div className="grid grid-cols-[1.2fr_1.3fr_1.1fr_.9fr] gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-500 md:grid-cols-[1.2fr_1.3fr_1.1fr_.9fr_1fr_.6fr]">
           <div>Student</div>
           <div>Location</div>
           <div>Dates</div>
           <div>Status</div>
           <div className="hidden md:block">Created</div>
+          <div className="hidden md:block text-right">Action</div>
         </div>
 
         <div>
@@ -473,19 +524,19 @@ export default function AdminAssignments() {
             filteredAssignments.map((a) => {
               const status = getStatus(a);
               const badgeClass =
-                status === 'Active'
+                status === 'active'
                   ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                  : status === 'Upcoming'
+                  : status === 'completed'
                     ? 'bg-sky-50 text-sky-700 ring-sky-200'
-                    : status === 'Ended'
+                    : status === 'inactive'
                       ? 'bg-slate-100 text-slate-700 ring-slate-200'
                       : 'bg-amber-50 text-amber-700 ring-amber-200';
 
               return (
-                <div key={a.assigned_id} className="grid grid-cols-[1.2fr_1.3fr_1.1fr_.9fr] items-center gap-2 border-b border-slate-100 px-5 py-4 md:grid-cols-[1.2fr_1.3fr_1.1fr_.9fr_1fr]">
+                <div key={a.assigned_id} className="grid grid-cols-[1.2fr_1.3fr_1.1fr_.9fr] items-center gap-2 border-b border-slate-100 px-5 py-4 md:grid-cols-[1.2fr_1.3fr_1.1fr_.9fr_1fr_.6fr]">
                   <div>
                     <div className="text-sm font-semibold text-slate-900">{a.assigned_user_name || ''}</div>
-                    <div className="mt-0.5 text-xs text-slate-500">ID: {a.assigned_id}</div>
+               
                   </div>
                   <div className="text-sm text-slate-700">
                     <div className="font-semibold text-slate-900">{a.building_name || ''}</div>
@@ -496,6 +547,16 @@ export default function AdminAssignments() {
                     <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${badgeClass}`}>{status}</span>
                   </div>
                   <div className="hidden text-sm text-slate-600 md:block">{fmtDate(a.assigned_created_at)}</div>
+                  <div className="hidden md:flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(a)}
+                      disabled={loading}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      Edit
+                    </button>
+                  </div>
                 </div>
               );
             })
