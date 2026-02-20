@@ -115,7 +115,7 @@ export default function Login() {
       case 'Admin':
         return '/Admin';
       case 'Student':
-        return '/Student/Dashboard';
+        return '/student/assignments';
       default:
         return '/login';
     }

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { useMediaQuery } from 'react-responsive';
 import { SecureStorage } from '../../utils/encryption';
 import { getApiBaseUrl } from '../../utils/apiConfig';
 import { toast } from '../../utils/toast';
@@ -7,11 +8,12 @@ import { toast } from '../../utils/toast';
 const withSlash = (base) => (base.endsWith('/') ? base : base + '/');
 
 export default function AdminAssignments() {
+  const isMobile = useMediaQuery({ maxWidth: 768 });
+  
   const [students, setStudents] = useState([]);
   const [buildings, setBuildings] = useState([]);
   const [floors, setFloors] = useState([]);
   const [assignments, setAssignments] = useState([]);
-  const [stats, setStats] = useState({ total: 0, active: 0, upcoming: 0, ended: 0, students: 0, buildings: 0 });
   const [loading, setLoading] = useState(false);
 
   const [query, setQuery] = useState('');
@@ -104,11 +106,10 @@ export default function AdminAssignments() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [studentsRes, buildingsRes, assignedRes, statsRes] = await Promise.all([
+      const [studentsRes, buildingsRes, assignedRes] = await Promise.all([
         axios.post(`${baseUrl}admin.php`, { operation: 'getStudents', json: {} }, { headers: { 'Content-Type': 'application/json' } }),
         axios.post(`${baseUrl}admin.php`, { operation: 'getBuildings', json: {} }, { headers: { 'Content-Type': 'application/json' } }),
-        axios.post(`${baseUrl}admin.php`, { operation: 'getAssigned', json: {} }, { headers: { 'Content-Type': 'application/json' } }),
-        axios.post(`${baseUrl}admin.php`, { operation: 'getAssignedStats', json: {} }, { headers: { 'Content-Type': 'application/json' } })
+        axios.post(`${baseUrl}admin.php`, { operation: 'getAssigned', json: {} }, { headers: { 'Content-Type': 'application/json' } })
       ]);
 
       if (studentsRes?.data?.success) {
@@ -132,18 +133,6 @@ export default function AdminAssignments() {
         toast.error(assignedRes?.data?.message || 'Failed to load assignments.');
       }
 
-      if (statsRes?.data?.success) {
-        setStats({
-          total: Number(statsRes?.data?.data?.total || 0),
-          active: Number(statsRes?.data?.data?.active || 0),
-          upcoming: Number(statsRes?.data?.data?.upcoming || 0),
-          ended: Number(statsRes?.data?.data?.ended || 0),
-          students: Number(statsRes?.data?.data?.students || 0),
-          buildings: Number(statsRes?.data?.data?.buildings || 0)
-        });
-      } else {
-        setStats({ total: 0, active: 0, upcoming: 0, ended: 0, students: 0, buildings: 0 });
-      }
     } catch (e) {
       toast.error('Network error. Please try again.');
     } finally {
@@ -310,46 +299,19 @@ export default function AdminAssignments() {
         </button>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-          <div className="text-xs font-semibold text-slate-500">Total</div>
-          <div className="mt-2 text-2xl font-semibold text-slate-900">{stats.total}</div>
-        </div>
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-          <div className="text-xs font-semibold text-emerald-700">Active</div>
-          <div className="mt-2 text-2xl font-semibold text-emerald-800">{stats.active}</div>
-        </div>
-        <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-          <div className="text-xs font-semibold text-sky-700">Upcoming</div>
-          <div className="mt-2 text-2xl font-semibold text-sky-800">{stats.upcoming}</div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-          <div className="text-xs font-semibold text-slate-600">Ended</div>
-          <div className="mt-2 text-2xl font-semibold text-slate-900">{stats.ended}</div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-          <div className="text-xs font-semibold text-slate-500">Students</div>
-          <div className="mt-2 text-2xl font-semibold text-slate-900">{stats.students}</div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-          <div className="text-xs font-semibold text-slate-500">Buildings</div>
-          <div className="mt-2 text-2xl font-semibold text-slate-900">{stats.buildings}</div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)] md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-1 flex-col gap-3 md:flex-row md:items-center">
+      <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search student, building, floor…"
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 md:max-w-sm"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 sm:max-w-sm"
           />
 
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 md:max-w-[180px]"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 sm:max-w-[180px]"
           >
             <option value="all">All statuses</option>
             <option value="active">Active</option>
@@ -360,7 +322,7 @@ export default function AdminAssignments() {
           <select
             value={buildingFilter}
             onChange={(e) => setBuildingFilter(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 md:max-w-[220px]"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 sm:max-w-[220px]"
           >
             <option value="all">All buildings</option>
             {buildingOptions.map((b) => (
@@ -369,7 +331,7 @@ export default function AdminAssignments() {
           </select>
         </div>
 
-        <div className="flex items-center justify-between gap-3 md:justify-end">
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
           <div className="text-sm text-slate-600">Showing <span className="font-semibold text-slate-900">{filteredAssignments.length}</span> of {assignments.length}</div>
           <button
             type="button"
@@ -393,7 +355,7 @@ export default function AdminAssignments() {
             if (e.target === e.currentTarget) closeModal();
           }}
         >
-          <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
+          <div className={`w-full rounded-2xl bg-white p-5 shadow-xl ${isMobile ? 'max-w-full h-full overflow-y-auto' : 'max-w-xl'}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="text-base font-semibold text-slate-900">{modalMode === 'edit' ? 'Edit Assignment' : 'Add Assignment'}</div>
               <button type="button" onClick={closeModal} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100">
@@ -417,38 +379,40 @@ export default function AdminAssignments() {
                 </select>
               </label>
 
-              <label className="grid gap-2 text-sm font-semibold text-slate-800">
-                Building
-                <select
-                  value={form.building_id}
-                  onChange={(e) => setForm((p) => ({ ...p, building_id: e.target.value, assigned_floor_building_id: '' }))}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                >
-                  <option value="">Select building...</option>
-                  {buildings.map((b) => (
-                    <option key={b.building_id} value={b.building_id}>{b.building_name}</option>
-                  ))}
-                </select>
-              </label>
+              <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'sm:grid-cols-2'}`}>
+                <label className="grid gap-2 text-sm font-semibold text-slate-800">
+                  Building
+                  <select
+                    value={form.building_id}
+                    onChange={(e) => setForm((p) => ({ ...p, building_id: e.target.value, assigned_floor_building_id: '' }))}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  >
+                    <option value="">Select building...</option>
+                    {buildings.map((b) => (
+                      <option key={b.building_id} value={b.building_id}>{b.building_name}</option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="grid gap-2 text-sm font-semibold text-slate-800">
-                Floor
-                <select
-                  value={form.assigned_floor_building_id}
-                  onChange={(e) => setForm((p) => ({ ...p, assigned_floor_building_id: e.target.value }))}
-                  disabled={!form.building_id || floors.length === 0}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:opacity-60"
-                >
-                  <option value="">
-                    {!form.building_id ? 'Select building first...' : (floors.length === 0 ? 'No floors available...' : 'Select floor...')}
-                  </option>
-                  {floors.map((f) => (
-                    <option key={f.floorbuilding_id} value={f.floorbuilding_id}>{f.floor_name}</option>
-                  ))}
-                </select>
-              </label>
+                <label className="grid gap-2 text-sm font-semibold text-slate-800">
+                  Floor
+                  <select
+                    value={form.assigned_floor_building_id}
+                    onChange={(e) => setForm((p) => ({ ...p, assigned_floor_building_id: e.target.value }))}
+                    disabled={!form.building_id || floors.length === 0}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:opacity-60"
+                  >
+                    <option value="">
+                      {!form.building_id ? 'Select building first...' : (floors.length === 0 ? 'No floors available...' : 'Select floor...')}
+                    </option>
+                    {floors.map((f) => (
+                      <option key={f.floorbuilding_id} value={f.floorbuilding_id}>{f.floor_name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'sm:grid-cols-2'}`}>
                 <label className="grid gap-2 text-sm font-semibold text-slate-800">
                   Start date
                   <input
@@ -483,7 +447,7 @@ export default function AdminAssignments() {
                 </select>
               </label>
 
-              <div className="flex justify-end gap-2">
+              <div className={`flex gap-2 ${isMobile ? 'flex-col' : 'justify-end'}`}>
                 <button
                   type="button"
                   onClick={closeModal}
@@ -505,66 +469,68 @@ export default function AdminAssignments() {
         </div>
       ) : null}
 
-      <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-        <div className="grid grid-cols-[1.2fr_1.3fr_1.1fr_.9fr] gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-500 md:grid-cols-[1.2fr_1.3fr_1.1fr_.9fr_1fr_.6fr]">
-          <div>Student</div>
-          <div>Location</div>
-          <div>Dates</div>
-          <div>Status</div>
-          <div className="hidden md:block">Created</div>
-          <div className="hidden md:block text-right">Action</div>
-        </div>
+      <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+        <div className="min-w-[900px]">
+          <div className="grid grid-cols-[1.2fr_1.3fr_1.1fr_.9fr_1fr_.6fr] gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-500">
+            <div>Student</div>
+            <div>Location</div>
+            <div>Dates</div>
+            <div>Status</div>
+            <div>Created</div>
+            <div className="text-right">Action</div>
+          </div>
 
-        <div>
-          {loading ? (
-            <div className="px-5 py-6 text-sm text-slate-500">Loading assignments…</div>
-          ) : null}
+          <div>
+            {loading ? (
+              <div className="px-5 py-6 text-sm text-slate-500">Loading assignments…</div>
+            ) : null}
 
-          {!loading ? (
-            filteredAssignments.map((a) => {
-              const status = getStatus(a);
-              const badgeClass =
-                status === 'active'
-                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                  : status === 'completed'
-                    ? 'bg-sky-50 text-sky-700 ring-sky-200'
-                    : status === 'inactive'
-                      ? 'bg-slate-100 text-slate-700 ring-slate-200'
-                      : 'bg-amber-50 text-amber-700 ring-amber-200';
+            {!loading ? (
+              filteredAssignments.map((a) => {
+                const status = getStatus(a);
+                const badgeClass =
+                  status === 'active'
+                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                    : status === 'completed'
+                      ? 'bg-sky-50 text-sky-700 ring-sky-200'
+                      : status === 'inactive'
+                        ? 'bg-slate-100 text-slate-700 ring-slate-200'
+                        : 'bg-amber-50 text-amber-700 ring-amber-200';
 
-              return (
-                <div key={a.assigned_id} className="grid grid-cols-[1.2fr_1.3fr_1.1fr_.9fr] items-center gap-2 border-b border-slate-100 px-5 py-4 md:grid-cols-[1.2fr_1.3fr_1.1fr_.9fr_1fr_.6fr]">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">{a.assigned_user_name || ''}</div>
-               
+                return (
+                  <div key={a.assigned_id} className="grid grid-cols-[1.2fr_1.3fr_1.1fr_.9fr_1fr_.6fr] items-center gap-2 border-b border-slate-100 px-5 py-4">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{a.assigned_user_name || ''}</div>
+                
+                    </div>
+                    <div className="text-sm text-slate-700">
+                      <div className="font-semibold text-slate-900">{a.building_name || ''}</div>
+                      <div className="text-xs text-slate-500">{a.floor_name || ''}</div>
+                    </div>
+                    <div className="text-sm text-slate-600">{fmtDate(a.assigned_start_date)} - {fmtDate(a.assigned_end_date)}</div>
+                    <div>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${badgeClass}`}>{status}</span>
+                    </div>
+                    <div className="text-sm text-slate-600">{fmtDate(a.assigned_created_at)}</div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(a)}
+                        disabled={loading}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </div>
-                  <div className="text-sm text-slate-700">
-                    <div className="font-semibold text-slate-900">{a.building_name || ''}</div>
-                    <div className="text-xs text-slate-500">{a.floor_name || ''}</div>
-                  </div>
-                  <div className="text-sm text-slate-600">{fmtDate(a.assigned_start_date)} - {fmtDate(a.assigned_end_date)}</div>
-                  <div>
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${badgeClass}`}>{status}</span>
-                  </div>
-                  <div className="hidden text-sm text-slate-600 md:block">{fmtDate(a.assigned_created_at)}</div>
-                  <div className="hidden md:flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(a)}
-                      disabled={loading}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                    >
-                      Edit
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          ) : null}
+                );
+              })
+            ) : null}
 
-          {!loading && filteredAssignments.length === 0 ? (
-            <div className="px-5 py-6 text-sm text-slate-500">No assignments found for the current filters.</div>
-          ) : null}
+            {!loading && filteredAssignments.length === 0 ? (
+              <div className="px-5 py-6 text-sm text-slate-500">No assignments found for the current filters.</div>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

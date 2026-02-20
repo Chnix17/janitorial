@@ -234,30 +234,30 @@ export default function RoomsBuildingsManagement() {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+    <div className="p-4 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="cc-page-title">Buildings & Rooms</h1>
-          <div className="cc-page-subtitle">Create, update, and delete buildings and room numbers.</div>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">Buildings & Rooms</h1>
+          <p className="mt-1 text-sm text-slate-500">Create, update, and delete buildings and room numbers.</p>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button type="button" className="cc-btn cc-btn-ghost" onClick={openCreateBuilding} disabled={loading}>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={openCreateBuilding} disabled={loading}>
             Add Building
           </button>
-          <button type="button" className="cc-btn cc-btn-primary" onClick={openCreateRoom} disabled={loading || buildings.length === 0}>
+          <button type="button" className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" onClick={openCreateRoom} disabled={loading || buildings.length === 0}>
             Add Room
           </button>
         </div>
       </div>
-      <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 14 }}>
-        <div className="cc-card cc-card-pad">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ fontWeight: 900 }}>Buildings</div>
-            <div style={{ color: 'var(--cc-muted)' }}>{loading ? 'Loading…' : `${buildings.length} record(s)`}</div>
+      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="font-semibold text-slate-900">Buildings</div>
+            <div className="text-sm text-slate-500">{loading ? 'Loading…' : `${buildings.length} record(s)`}</div>
           </div>
 
-          <div style={{ marginTop: 10, overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 380 }}>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full border-collapse" style={{ minWidth: 380 }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: 'var(--cc-muted)' }}>
                   <th style={{ padding: '10px 8px', borderBottom: '1px solid rgba(15,23,42,0.10)' }}>ID</th>
@@ -295,14 +295,14 @@ export default function RoomsBuildingsManagement() {
           </div>
         </div>
 
-        <div className="cc-card cc-card-pad">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ fontWeight: 900 }}>Rooms</div>
-            <div style={{ color: 'var(--cc-muted)' }}>{loading ? 'Loading…' : `${rooms.length} record(s)`}</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="font-semibold text-slate-900">Rooms</div>
+            <div className="text-sm text-slate-500">{loading ? 'Loading…' : `${rooms.length} record(s)`}</div>
           </div>
 
-          <div style={{ marginTop: 10, overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full border-collapse" style={{ minWidth: 520 }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: 'var(--cc-muted)' }}>
                   <th style={{ padding: '10px 8px', borderBottom: '1px solid rgba(15,23,42,0.10)' }}>ID</th>
@@ -362,12 +362,12 @@ export default function RoomsBuildingsManagement() {
             }
           }}
         >
-          <div className="cc-card" style={{ width: 'min(560px, 100%)', padding: 16, boxShadow: '0 20px 50px rgba(15,23,42,.35)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontWeight: 900, fontSize: 16 }}>{editingBuilding ? 'Update Building' : 'Create Building'}</div>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-base font-semibold text-slate-900">{editingBuilding ? 'Update Building' : 'Create Building'}</div>
               <button
                 type="button"
-                className="cc-btn cc-btn-ghost"
+                className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100"
                 onClick={() => {
                   setOpenBuildingForm(false);
                   setEditingBuilding(null);
@@ -375,20 +375,20 @@ export default function RoomsBuildingsManagement() {
                 }}
                 disabled={loading}
               >
-                Close
+                ✕
               </button>
             </div>
 
-            <form onSubmit={submitBuilding} style={{ marginTop: 12, display: 'grid', gap: 12 }}>
-              <label className="cc-label">
+            <form onSubmit={submitBuilding} className="mt-4 grid gap-4">
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
                 Building name
-                <input className="cc-input" value={buildingName} onChange={(e) => setBuildingName(e.target.value)} />
+                <input className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" value={buildingName} onChange={(e) => setBuildingName(e.target.value)} />
               </label>
 
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  className="cc-btn cc-btn-ghost"
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   onClick={() => {
                     setOpenBuildingForm(false);
                     setEditingBuilding(null);
@@ -398,7 +398,7 @@ export default function RoomsBuildingsManagement() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="cc-btn cc-btn-primary" disabled={loading}>
+                <button type="submit" className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" disabled={loading}>
                   {loading ? 'Saving…' : (editingBuilding ? 'Update' : 'Create')}
                 </button>
               </div>
@@ -426,12 +426,12 @@ export default function RoomsBuildingsManagement() {
             }
           }}
         >
-          <div className="cc-card" style={{ width: 'min(720px, 100%)', padding: 16, boxShadow: '0 20px 50px rgba(15,23,42,.35)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontWeight: 900, fontSize: 16 }}>{editingRoom ? 'Update Room' : 'Create Room'}</div>
+          <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-base font-semibold text-slate-900">{editingRoom ? 'Update Room' : 'Create Room'}</div>
               <button
                 type="button"
-                className="cc-btn cc-btn-ghost"
+                className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100"
                 onClick={() => {
                   setOpenRoomForm(false);
                   setEditingRoom(null);
@@ -439,15 +439,15 @@ export default function RoomsBuildingsManagement() {
                 }}
                 disabled={loading}
               >
-                Close
+                ✕
               </button>
             </div>
 
-            <form onSubmit={submitRoom} style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <label className="cc-label" style={{ gridColumn: '1 / -1' }}>
+            <form onSubmit={submitRoom} className="mt-4 grid gap-4">
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
                 Building
                 <select
-                  className="cc-input"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                   value={roomForm.building_id}
                   onChange={(e) => setRoomForm((p) => ({ ...p, building_id: e.target.value }))}
                 >
@@ -458,19 +458,19 @@ export default function RoomsBuildingsManagement() {
                 </select>
               </label>
 
-              <label className="cc-label" style={{ gridColumn: '1 / -1' }}>
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
                 Room number
                 <input
-                  className="cc-input"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                   value={roomForm.room_number}
                   onChange={(e) => setRoomForm((p) => ({ ...p, room_number: e.target.value }))}
                 />
               </label>
 
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', gridColumn: '1 / -1' }}>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  className="cc-btn cc-btn-ghost"
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   onClick={() => {
                     setOpenRoomForm(false);
                     setEditingRoom(null);
@@ -480,7 +480,7 @@ export default function RoomsBuildingsManagement() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="cc-btn cc-btn-primary" disabled={loading}>
+                <button type="submit" className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" disabled={loading}>
                   {loading ? 'Saving…' : (editingRoom ? 'Update' : 'Create')}
                 </button>
               </div>

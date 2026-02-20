@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jan 26, 2026 at 11:13 PM
+-- Generation Time: Feb 18, 2026 at 11:24 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -43,7 +43,10 @@ CREATE TABLE `tblassigned` (
 --
 
 INSERT INTO `tblassigned` (`assigned_id`, `assigned_user_id`, `assigned_floor_building_id`, `assigned_start_date`, `assigned_end_date`, `assigned_status_enum`, `assigned_by_user_id`, `assigned_created_at`) VALUES
-(1, 2, 1, '2026-01-26', '2026-03-31', 'active', 1, '2026-01-26 05:12:56');
+(1, 2, 2, '2026-01-26', '2026-03-31', 'active', 1, '2026-01-26 05:12:56'),
+(2, 2, 1, '2026-02-04', '2026-02-05', 'active', 1, '2026-02-04 06:45:06'),
+(3, 2, 2, '2026-02-12', '2026-02-18', 'active', 1, '2026-02-04 07:03:06'),
+(4, 2, 2, '2026-03-11', '2026-03-12', 'completed', 1, '2026-02-11 22:57:45');
 
 -- --------------------------------------------------------
 
@@ -65,12 +68,13 @@ CREATE TABLE `tblassignedoperation` (
 --
 
 INSERT INTO `tblassignedoperation` (`operation_id`, `operation_is_functional`, `operation_updated_at`, `operation_updated_by`, `operation_room_id`, `operation_checklist_id`) VALUES
-(1, 1, '2026-01-27 06:01:25', 2, 1, 2),
-(2, 1, '2026-01-27 06:01:27', 2, 1, 1),
-(3, 0, '2026-01-27 06:01:28', 2, 1, 3),
-(4, 1, '2026-01-27 06:11:50', 2, 1, 1),
-(5, 1, '2026-01-27 06:11:50', 2, 1, 2),
-(6, 0, '2026-01-27 06:11:50', 2, 1, 3);
+(23, 1, '2026-02-04 09:30:31', 2, 6, 7),
+(24, 1, '2026-02-04 10:15:19', 2, 7, 8),
+(25, 0, '2026-02-04 10:15:27', 2, 8, 9),
+(26, 1, '2026-02-11 20:11:49', 2, 6, 7),
+(27, 1, '2026-02-11 20:11:51', 2, 7, 8),
+(28, 0, '2026-02-11 20:11:53', 2, 8, 9),
+(29, 1, '2026-02-15 00:32:47', 2, 6, 7);
 
 -- --------------------------------------------------------
 
@@ -81,9 +85,11 @@ INSERT INTO `tblassignedoperation` (`operation_id`, `operation_is_functional`, `
 CREATE TABLE `tblassignedstatus` (
   `assigned_status_id` int(11) NOT NULL,
   `assigned_id` int(11) NOT NULL,
+  `room_id` int(11) NOT NULL,
   `assigned_remarks` text DEFAULT NULL,
   `assigned_status` enum('fair','good','excellent','poor') NOT NULL,
   `assigned_reported_by` int(11) NOT NULL,
+  `completion_date` date NOT NULL DEFAULT curdate(),
   `assigned_updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -91,8 +97,14 @@ CREATE TABLE `tblassignedstatus` (
 -- Dumping data for table `tblassignedstatus`
 --
 
-INSERT INTO `tblassignedstatus` (`assigned_status_id`, `assigned_id`, `assigned_remarks`, `assigned_status`, `assigned_reported_by`, `assigned_updated_at`) VALUES
-(1, 1, 'basta mao nani', 'good', 2, '2026-01-26 22:11:50');
+INSERT INTO `tblassignedstatus` (`assigned_status_id`, `assigned_id`, `room_id`, `assigned_remarks`, `assigned_status`, `assigned_reported_by`, `completion_date`, `assigned_updated_at`) VALUES
+(12, 1, 6, 'hehehe', 'excellent', 2, '2026-02-04', '2026-02-04 01:40:43'),
+(13, 1, 7, 'asd', 'good', 2, '2026-02-04', '2026-02-04 02:15:19'),
+(14, 1, 8, 'dadsa', 'good', 2, '2026-02-04', '2026-02-04 02:15:27'),
+(15, 1, 6, 'hehehe', 'excellent', 2, '2026-02-11', '2026-02-11 12:11:49'),
+(16, 1, 7, 'asd', 'good', 2, '2026-02-11', '2026-02-11 12:11:51'),
+(17, 1, 8, 'dadsa', 'good', 2, '2026-02-11', '2026-02-11 12:11:53'),
+(18, 3, 6, 'sample', 'good', 2, '2026-02-15', '2026-02-14 16:32:47');
 
 -- --------------------------------------------------------
 
@@ -129,7 +141,8 @@ CREATE TABLE `tblbuildingfloor` (
 --
 
 INSERT INTO `tblbuildingfloor` (`floorbuilding_id`, `building_id`, `floor_id`) VALUES
-(1, 1, 1);
+(1, 1, 1),
+(2, 1, 2);
 
 -- --------------------------------------------------------
 
@@ -147,7 +160,8 @@ CREATE TABLE `tblfloor` (
 --
 
 INSERT INTO `tblfloor` (`floor_id`, `floor_name`) VALUES
-(1, '1st floor');
+(1, '1st floor'),
+(2, '2nd floor');
 
 -- --------------------------------------------------------
 
@@ -190,7 +204,10 @@ INSERT INTO `tblroom` (`room_id`, `room_number`, `room_building_floor_id`) VALUE
 (2, '102', 1),
 (3, '103', 1),
 (4, '104', 1),
-(5, '105', 1);
+(5, '105', 1),
+(6, '101', 2),
+(7, '102', 2),
+(8, '103', 2);
 
 -- --------------------------------------------------------
 
@@ -211,7 +228,13 @@ CREATE TABLE `tblroomchecklist` (
 INSERT INTO `tblroomchecklist` (`checklist_id`, `checklist_name`, `checklist_room_id`) VALUES
 (1, 'sample checklist', 1),
 (2, 'sample', 1),
-(3, 'sample1', 1);
+(3, 'sample1', 1),
+(4, 'so mao to', 2),
+(5, 'kani', 2),
+(6, 'hehe', 3),
+(7, 'asd', 6),
+(8, 'hehe', 7),
+(9, 'hehehe', 8);
 
 -- --------------------------------------------------------
 
@@ -248,7 +271,8 @@ CREATE TABLE `tbluser` (
 
 INSERT INTO `tbluser` (`user_id`, `full_name`, `username`, `password`, `role_id`, `is_active`, `created_at`) VALUES
 (1, 'GSD Office', 'gsd', '$2y$10$AH57IY3TS54w.jYWhOMIOOEAfz.baGBmrizhqKVEJPJ1rJesx3d5a', 1, 1, '2026-01-13 14:17:18'),
-(2, 'asd', 'asd', '$2y$10$IeWX54Zx54D0mxKWnkQ5zO.lQc6KT8wYOl6CiLOLz98myo4XNaDq6', 2, 1, '2026-01-13 15:38:46');
+(2, 'Christian Mark Valle', 'asd', '$2y$10$IeWX54Zx54D0mxKWnkQ5zO.lQc6KT8wYOl6CiLOLz98myo4XNaDq6', 2, 1, '2026-01-13 15:38:46'),
+(3, 'asd', 'asdd', '$2y$10$rR5waPRwRz0TA52AL7xZDePv4sI3ehFWthXYGKoG/lHJFvVeExepe', 1, 1, '2026-02-11 14:58:29');
 
 --
 -- Indexes for dumped tables
@@ -343,19 +367,19 @@ ALTER TABLE `tbluser`
 -- AUTO_INCREMENT for table `tblassigned`
 --
 ALTER TABLE `tblassigned`
-  MODIFY `assigned_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `assigned_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `tblassignedoperation`
 --
 ALTER TABLE `tblassignedoperation`
-  MODIFY `operation_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `operation_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
 
 --
 -- AUTO_INCREMENT for table `tblassignedstatus`
 --
 ALTER TABLE `tblassignedstatus`
-  MODIFY `assigned_status_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `assigned_status_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT for table `tblbuilding`
@@ -367,13 +391,13 @@ ALTER TABLE `tblbuilding`
 -- AUTO_INCREMENT for table `tblbuildingfloor`
 --
 ALTER TABLE `tblbuildingfloor`
-  MODIFY `floorbuilding_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `floorbuilding_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `tblfloor`
 --
 ALTER TABLE `tblfloor`
-  MODIFY `floor_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `floor_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `tblrole`
@@ -385,13 +409,13 @@ ALTER TABLE `tblrole`
 -- AUTO_INCREMENT for table `tblroom`
 --
 ALTER TABLE `tblroom`
-  MODIFY `room_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `room_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `tblroomchecklist`
 --
 ALTER TABLE `tblroomchecklist`
-  MODIFY `checklist_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `checklist_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `tblstudent_activity`
@@ -403,7 +427,7 @@ ALTER TABLE `tblstudent_activity`
 -- AUTO_INCREMENT for table `tbluser`
 --
 ALTER TABLE `tbluser`
-  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- Constraints for dumped tables

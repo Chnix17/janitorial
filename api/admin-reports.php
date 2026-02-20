@@ -193,7 +193,7 @@ class AdminReports {
 
             $whereClause = count($whereConditions) > 0 ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
 
-            $stmt = $this->conn->prepare("
+            $stmt = $this->conn->prepare(" 
                 SELECT 
                     s.assigned_status_id,
                     r.room_id,
@@ -213,7 +213,7 @@ class AdminReports {
                 JOIN tblfloor f ON f.floor_id = bf.floor_id
                 JOIN tbluser u ON u.user_id = s.assigned_reported_by
                 $whereClause
-                ORDER BY s.completion_date DESC, b.building_name ASC, f.floor_name ASC, r.room_number ASC
+                ORDER BY DATE(s.completion_date) DESC, s.assigned_updated_at DESC, b.building_name ASC, f.floor_name ASC, r.room_number ASC
             ");
             $stmt->execute($params);
             $inspections = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -239,12 +239,15 @@ class AdminReports {
 
                     $checklistStmt = $this->conn->prepare('
                         SELECT
-                            c.checklist_room_id AS room_id,
+                            r.room_id,
                             c.checklist_id,
-                            c.checklist_name
-                        FROM tblroomchecklist c
-                        WHERE c.checklist_room_id IN (' . $roomPlaceholders . ')
-                        ORDER BY c.checklist_room_id ASC, c.checklist_name ASC
+                            c.checklist_name,
+                            c.checklist_type,
+                            c.checklist_quantity
+                        FROM tblroom r
+                        JOIN tblroomchecklist c ON c.checklist_floorbuilding_id = r.room_building_floor_id
+                        WHERE r.room_id IN (' . $roomPlaceholders . ')
+                        ORDER BY r.room_id ASC, c.checklist_name ASC
                     ');
                     $checklistStmt->execute($roomIds);
                     $checklistRows = $checklistStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -255,7 +258,9 @@ class AdminReports {
                         if (!isset($byRoomChecklist[$rid])) $byRoomChecklist[$rid] = [];
                         $byRoomChecklist[$rid][] = [
                             'checklist_id' => (int)$cr['checklist_id'],
-                            'checklist_name' => $cr['checklist_name']
+                            'checklist_name' => $cr['checklist_name'],
+                            'checklist_type' => $cr['checklist_type'] ?? 'boolean',
+                            'checklist_quantity' => $cr['checklist_quantity'] ?? null
                         ];
                     }
 

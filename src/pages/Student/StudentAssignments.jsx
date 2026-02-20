@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import axios from 'axios';
 
@@ -9,6 +9,7 @@ import { getApiBaseUrl } from '../../utils/apiConfig';
 import { useAuth } from '../../auth/AuthContext';
 
 import { toast } from '../../utils/toast';
+import { useMediaQuery } from 'react-responsive';
 
 
 
@@ -17,11 +18,18 @@ const withSlash = (base) => (base.endsWith('/') ? base : base + '/');
 // Helper: Get current date in Asia/Manila timezone as YYYY-MM-DD
 const getManilaDate = () => {
   const now = new Date();
-  const manilaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
-  const y = manilaTime.getFullYear();
-  const m = String(manilaTime.getMonth() + 1).padStart(2, '0');
-  const d = String(manilaTime.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  // Use Intl.DateTimeFormat for more reliable timezone conversion
+  const formatter = new Intl.DateTimeFormat('en-CA', { 
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = formatter.formatToParts(now);
+  const year = parts.find(p => p.type === 'year')?.value;
+  const month = parts.find(p => p.type === 'month')?.value;
+  const day = parts.find(p => p.type === 'day')?.value;
+  return `${year}-${month}-${day}`;
 };
 
 // Helper: Check if today is Sunday in Asia/Manila timezone
@@ -107,13 +115,15 @@ export default function StudentAssignments() {
 
   const isTodaySunday = useMemo(() => isSundayInManila(), []);
 
+  const isMobile = useMediaQuery({ maxWidth: 640 });
+
   const selectedAssignment = useMemo(() => {
     const id = Number(selectedAssignmentId);
     if (!id) return null;
     return assignments.find((a) => Number(a.assigned_id) === id) || null;
   }, [assignments, selectedAssignmentId]);
 
-  const loadRoomsByAssignmentId = async (assignedId) => {
+  const loadRoomsByAssignmentId = useCallback(async (assignedId) => {
 
     const aid = Number(assignedId);
 
@@ -167,11 +177,11 @@ export default function StudentAssignments() {
 
     }
 
-  };
+  }, [baseUrl]);
 
 
 
-  const loadAssignmentAndRooms = async () => {
+  const loadAssignmentAndRooms = useCallback(async () => {
 
     if (!assignedUserId) {
 
@@ -291,7 +301,7 @@ export default function StudentAssignments() {
 
     }
 
-  };
+  }, [assignedUserId, baseUrl, selectedAssignmentId, todayYmd, loadRoomsByAssignmentId]);
 
 
 
@@ -448,25 +458,17 @@ export default function StudentAssignments() {
 
 
     const operations = Object.entries(selectedByChecklistId)
-
-      .filter(([, value]) => value === 0 || value === 1)
-
+      .filter(([, value]) => value !== null && value !== undefined && value !== '')
       .map(([checklistId, value]) => ({
-
         checklist_id: Number(checklistId),
-
-        status: Number(value)
-
+        status: value
       }));
 
 
 
     if (operations.length === 0) {
-
-      toast.error('Please select OK or Not OK for at least one checklist item.');
-
+      toast.error('Please provide a value for at least one checklist item.');
       return;
-
     }
 
 
@@ -541,7 +543,7 @@ export default function StudentAssignments() {
 
     loadAssignmentAndRooms();
 
-  }, [assignedUserId]);
+  }, [assignedUserId, loadAssignmentAndRooms]);
 
   useEffect(() => {
 
@@ -551,11 +553,10 @@ export default function StudentAssignments() {
 
     loadRoomsByAssignmentId(selectedAssignmentId);
 
-  }, [selectedAssignmentId]);
+  }, [selectedAssignmentId, loadRoomsByAssignmentId, selectedAssignment]);
 
 
 
-  const selectedRoomId = selectedRoom?.room_id;
 
   const getStatusLabel = (value) => {
 
@@ -594,43 +595,26 @@ export default function StudentAssignments() {
 
 
       {assignments.length > 1 && (
-
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-
+        <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3">
           <div className="text-xs font-semibold text-slate-500">Select assignment:</div>
-
-          <select
-
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
-
-            value={selectedAssignmentId}
-
-            onChange={(e) => setSelectedAssignmentId(e.target.value)}
-
-          >
-
-            {assignments.map((a) => (
-
-              <option
-
-                key={a.assigned_id}
-
-                value={a.assigned_id}
-
-                disabled={todayYmd < a.assigned_start_date}
-
-              >
-
-                {a.building_name} • {a.floor_name} ({a.assigned_start_date} to {a.assigned_end_date}){todayYmd < a.assigned_start_date ? ' - Not started yet' : ''}
-
-              </option>
-
-            ))}
-
-          </select>
-
+          <div className="w-full sm:w-auto">
+            <select
+              className="w-full sm:w-auto min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 truncate"
+              value={selectedAssignmentId}
+              onChange={(e) => setSelectedAssignmentId(e.target.value)}
+            >
+              {assignments.map((a) => (
+                <option
+                  key={a.assigned_id}
+                  value={a.assigned_id}
+                  disabled={todayYmd < a.assigned_start_date}
+                >
+                  {a.building_name} • {a.floor_name} ({a.assigned_start_date} to {a.assigned_end_date}){todayYmd < a.assigned_start_date ? ' - Not started yet' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-
       )}
 
 
@@ -729,154 +713,380 @@ export default function StudentAssignments() {
 
 
 
-      {isChecklistOpen ? (
-
+      {isChecklistOpen && (
         <div
-
-          className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4"
-
-          onMouseDown={(e) => {
-
-            if (e.target === e.currentTarget) setIsChecklistOpen(false);
-
-          }}
-
+          className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm ${isMobile ? 'p-0' : 'p-4'}`}
+          onMouseDown={(e) => e.target === e.currentTarget && setIsChecklistOpen(false)}
         >
-
-          <div className="flex w-full max-w-3xl flex-col rounded-2xl bg-white shadow-xl" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
-
-            <div className="border-b border-slate-200 p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-base font-extrabold text-slate-900">Room {selectedRoom?.room_number}</div>
-                  <div className="mt-1 text-xs text-slate-500">{selectedRoom?.building_name} • {selectedRoom?.floor_name}</div>
+          <div
+            className={`flex w-full flex-col bg-white shadow-2xl ${
+              isMobile ? 'h-full max-w-full rounded-none' : 'max-w-3xl rounded-2xl'
+            }`}
+            style={{ maxHeight: isMobile ? '100vh' : 'calc(100vh - 2rem)' }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
                 </div>
-
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Room {selectedRoom?.room_number}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    {selectedRoom?.building_name} • {selectedRoom?.floor_name}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
                 <span
-                  className={`h-fit rounded-full px-3 py-1 text-xs font-semibold ${
-                    isViewOnly ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    isViewOnly
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-amber-100 text-amber-700'
                   }`}
                 >
                   {selectedRoom?.status || 'Pending'}
                 </span>
-
                 <button
                   type="button"
                   onClick={() => setIsChecklistOpen(false)}
-                  className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
                 >
-                  ✕
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5">
-              <div className="text-sm font-extrabold text-slate-900">Inspection Checklist</div>
+            {/* Body */}
+            <div className={`flex-1 overflow-hidden ${isMobile ? 'flex flex-col' : 'flex flex-row'}`}>
+              {/* Left side: Checklist */}
+              <div className={`${isMobile ? 'flex-1 overflow-y-auto p-4' : 'flex-1 overflow-y-auto border-r border-slate-200 p-5'}`}>
+                <div className="mb-4">
+                  <h3 className="text-sm font-bold text-slate-900">Inspection Checklist</h3>
+                  <p className="text-xs text-slate-500">Mark each item as OK or Not OK</p>
+                </div>
 
-              <div className="mt-4">
                 {checklistLoading ? (
-                  <div className="text-sm text-slate-500">Loading checklist...</div>
+                  <div className="flex items-center gap-3 py-8 text-slate-500">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-emerald-500" />
+                    <span className="text-sm">Loading checklist...</span>
+                  </div>
                 ) : checklist.length === 0 ? (
-                  <div className="text-sm text-slate-500">No checklist items found for this room.</div>
+                  <div className="rounded-xl bg-slate-50 py-8 text-center">
+                    <p className="text-sm text-slate-500">No checklist items found for this room.</p>
+                  </div>
                 ) : (
-                  <div className="grid gap-4">
+                  <div className="space-y-3">
                     {checklist.map((item) => {
                       const cid = Number(item.checklist_id);
+                      const itemType = item.checklist_type || 'boolean';
                       const v = selectedByChecklistId[cid] ?? null;
-                      const isOk = Number(v) === 1;
-                      const isNotOk = Number(v) === 0;
+
+                      // Render based on item type
+                      const renderInput = () => {
+                        switch (itemType) {
+                          case 'quantity':
+                            const expectedQty = item.checklist_quantity;
+                            const currentVal = v !== null ? v : '';
+                            return (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-slate-500">Found:</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={currentVal}
+                                    onChange={(e) => selectChecklistStatus(cid, e.target.value)}
+                                    disabled={isViewOnly}
+                                    placeholder={`Expected: ${expectedQty}`}
+                                    className={`w-20 rounded-lg border px-3 py-2 text-sm font-semibold text-center outline-none transition ${
+                                      isViewOnly ? 'cursor-not-allowed opacity-60 bg-slate-100' : 'border-slate-200 bg-white text-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100'
+                                    }`}
+                                  />
+                                  <span className="text-xs text-slate-500">/ {expectedQty}</span>
+                                </div>
+                                {currentVal !== '' && Number(currentVal) !== Number(expectedQty) && (
+                                  <div className="text-xs text-amber-600">
+                                    ⚠️ Expected {expectedQty}, found {currentVal}
+                                  </div>
+                                )}
+                              </div>
+                            );
+
+                          case 'condition':
+                            const options = item.checklist_options ? item.checklist_options.split(',').map(o => o.trim()) : [];
+                            return (
+                              <select
+                                value={v || ''}
+                                onChange={(e) => selectChecklistStatus(cid, e.target.value)}
+                                disabled={isViewOnly}
+                                className={`w-full rounded-lg border px-3 py-2.5 text-sm font-semibold outline-none transition ${
+                                  v
+                                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                                    : 'border-slate-200 bg-white text-slate-600'
+                                } ${isViewOnly ? 'cursor-not-allowed opacity-60' : 'hover:border-emerald-300'}`}
+                              >
+                                <option value="">Select condition...</option>
+                                {options.map((opt) => (
+                                  <option key={opt} value={opt}>{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
+                                ))}
+                              </select>
+                            );
+
+                          case 'boolean':
+                          default:
+                            const isOk = v !== null && v !== undefined && Number(v) === 1;
+                            const isNotOk = v !== null && v !== undefined && Number(v) === 0;
+                            return (
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => selectChecklistStatus(cid, 1)}
+                                  disabled={isViewOnly}
+                                  className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition ${
+                                    isOk
+                                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                                      : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50/50'
+                                  } ${isViewOnly ? 'cursor-not-allowed opacity-60' : ''}`}
+                                >
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  OK
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => selectChecklistStatus(cid, 0)}
+                                  disabled={isViewOnly}
+                                  className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition ${
+                                    isNotOk
+                                      ? 'border-rose-500 bg-rose-50 text-rose-700'
+                                      : 'border-slate-200 bg-white text-slate-600 hover:border-rose-300 hover:bg-rose-50/50'
+                                  } ${isViewOnly ? 'cursor-not-allowed opacity-60' : ''}`}
+                                >
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                  Not OK
+                                </button>
+                              </div>
+                            );
+                        }
+                      };
+
+                      const getStatusDisplay = () => {
+                        if (v === null || v === undefined) {
+                          return <span className="text-xs text-slate-500">Not recorded</span>;
+                        }
+                        if (itemType === 'quantity') {
+                          const expected = item.checklist_quantity;
+                          const match = Number(v) === Number(expected);
+                          return (
+                            <span className={`text-xs ${match ? 'text-emerald-600' : 'text-amber-600'}`}>
+                              Found {v} of {expected}
+                            </span>
+                          );
+                        }
+                        if (itemType === 'condition') {
+                          return <span className="text-xs text-emerald-600">{v}</span>;
+                        }
+                        // boolean
+                        return Number(v) === 1
+                          ? <span className="text-xs text-emerald-600">OK</span>
+                          : <span className="text-xs text-rose-600">Not OK</span>;
+                      };
+
+                      const getStatusColor = () => {
+                        if (v === null || v === undefined) return 'bg-slate-300';
+                        if (itemType === 'quantity') {
+                          return Number(v) === Number(item.checklist_quantity) ? 'bg-emerald-500' : 'bg-amber-500';
+                        }
+                        if (itemType === 'condition') {
+                          const goodOptions = ['good', 'clean', 'working', 'functional', 'ok'];
+                          return goodOptions.some(g => v.toLowerCase().includes(g)) ? 'bg-emerald-500' : 'bg-amber-500';
+                        }
+                        return Number(v) === 1 ? 'bg-emerald-500' : 'bg-rose-500';
+                      };
 
                       return (
-                        <div key={cid} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                          <div className="text-sm font-semibold text-slate-900">{item.checklist_name}</div>
-
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                            <button
-                              type="button"
-                              onClick={() => selectChecklistStatus(cid, 1)}
-                              disabled={isViewOnly}
-                              className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
-                                isOk ? 'border-emerald-300 bg-emerald-100 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'
-                              }`}
-                            >
-                              OK
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => selectChecklistStatus(cid, 0)}
-                              disabled={isViewOnly}
-                              className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
-                                isNotOk ? 'border-rose-300 bg-rose-100 text-rose-700' : 'border-slate-200 bg-white text-slate-600'
-                              }`}
-                            >
-                              Not OK
-                            </button>
+                        <div
+                          key={cid}
+                          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                        >
+                          <div className="mb-3">
+                            <span className="text-sm font-semibold text-slate-900">
+                              {item.checklist_name}
+                            </span>
+                            {itemType === 'quantity' && item.checklist_quantity && (
+                              <span className="ml-2 text-xs text-slate-500">
+                                (Expected: {item.checklist_quantity})
+                              </span>
+                            )}
                           </div>
 
-                          <div className="mt-2 text-xs text-slate-500">Status: {getStatusLabel(v)}</div>
+                          {renderInput()}
+
+                          <div className="mt-2 flex items-center gap-1.5">
+                            <span className={`h-2 w-2 rounded-full ${getStatusColor()}`} />
+                            {getStatusDisplay()}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 )}
               </div>
-            </div>
 
-            <div className="border-t border-slate-200 p-5">
-              <div className="grid gap-4">
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">Overall Condition</div>
+              {/* Right side: Overall Condition, Remarks, Submit (web only) */}
+              {!isMobile && (
+                <div className="w-80 flex flex-col bg-slate-50/50 p-5">
+                  <div className="flex-1 overflow-y-auto space-y-4">
+                    {/* Overall Condition */}
+                    <div>
+                      <label className="mb-2 block text-sm font-bold text-slate-900">
+                        Overall Condition
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {['Excellent', 'Good', 'Fair', 'Poor'].map((label) => (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() => setOverallCondition(label)}
+                            disabled={isViewOnly}
+                            className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                              overallCondition === label
+                                ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50/30'
+                            } ${isViewOnly ? 'cursor-not-allowed opacity-60' : ''}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-                  <div className="mt-3 grid gap-2 sm:grid-cols-4">
-                    {['Excellent', 'Good', 'Fair', 'Poor'].map((label) => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => setOverallCondition(label)}
+                    {/* Remarks */}
+                    <div>
+                      <label className="mb-2 block text-sm font-bold text-slate-900">
+                        Remarks
+                      </label>
+                      <textarea
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder-slate-400 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        placeholder="Add remarks about the inspection..."
+                        rows={4}
+                        value={remarks}
+                        onChange={(e) => setRemarks(e.target.value)}
                         disabled={isViewOnly}
-                        className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
-                          overallCondition === label
-                            ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
-                            : 'border-slate-200 bg-white text-slate-600'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="pt-4 border-t border-slate-200 mt-4">
+                    <button
+                      type="button"
+                      onClick={submitInspection}
+                      disabled={submitting || isViewOnly}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition hover:bg-emerald-700 hover:shadow-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+                    >
+                      {submitting ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                          Submitting...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Submit Inspection
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
-
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">Remarks</div>
-                  <textarea
-                    className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                    placeholder="Add remarks about the inspection..."
-                    rows={3}
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    disabled={isViewOnly}
-                  />
-                </div>
-
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={submitInspection}
-                    disabled={submitting || isViewOnly}
-                    className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
-                  >
-                    {submitting ? 'Submitting…' : 'Submit Inspection'}
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
 
+            {/* Mobile Footer (overall condition, remarks, submit) */}
+            {isMobile && (
+              <div className={`border-t border-slate-200 ${isMobile ? 'p-4 pb-safe' : 'p-5'}`}>
+                <div className="space-y-4">
+                  {/* Overall Condition */}
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-slate-900">
+                      Overall Condition
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['Excellent', 'Good', 'Fair', 'Poor'].map((label) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => setOverallCondition(label)}
+                          disabled={isViewOnly}
+                          className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                            overallCondition === label
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50/30'
+                          } ${isViewOnly ? 'cursor-not-allowed opacity-60' : ''}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Remarks */}
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-slate-900">
+                      Remarks
+                    </label>
+                    <textarea
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder-slate-400 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      placeholder="Add remarks about the inspection..."
+                      rows={3}
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      disabled={isViewOnly}
+                    />
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="button"
+                      onClick={submitInspection}
+                      disabled={submitting || isViewOnly}
+                      className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition hover:bg-emerald-700 hover:shadow-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+                    >
+                      {submitting ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                          Submitting...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Submit Inspection
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-
         </div>
-
-      ) : null}
+      )}
 
     </div>
 

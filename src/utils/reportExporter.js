@@ -49,15 +49,6 @@ export const generateAssignmentReport = (reportData, filters = {}, options = {})
   doc.setTextColor(100);
   doc.text(`Filters: ${getFilterSummary(filters)}`, 14, 36);
   
-  // Summary
-  doc.setFontSize(12);
-  doc.setTextColor(0);
-  doc.text('Summary', 14, 46);
-  doc.setFontSize(10);
-  doc.text(`Total Buildings: ${reportData.summary.total_buildings}`, 14, 54);
-  doc.text(`Total Floors: ${reportData.summary.total_floors}`, 14, 60);
-  doc.text(`Total Students: ${reportData.summary.total_students}`, 14, 66);
-  doc.text(`Total Assignments: ${reportData.summary.total_assignments}`, 14, 72);
   
   const tableData = reportData.assignments.map(item => [
     item.building_name,
@@ -80,35 +71,9 @@ export const generateAssignmentReport = (reportData, filters = {}, options = {})
 
 // Export Inspection Summary Report
 export const generateInspectionReport = (reportData, filters = {}, options = {}) => {
-  const doc = new jsPDF({ orientation: 'landscape' });
-  
-  doc.setFontSize(18);
-  doc.setTextColor(16, 185, 129);
-  doc.text('Inspection Report', 14, 22);
-  
-  doc.setFontSize(10);
-  doc.setTextColor(100);
-  doc.text(`Period: ${reportData.summary.date_range}`, 14, 30);
-  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 36);
-  doc.text(`Filters: ${getFilterSummary(filters)}`, 14, 42);
-  
-  // Summary stats
-  doc.setFontSize(11);
-  doc.setTextColor(0);
-  doc.text(`Total Inspections: ${reportData.summary.total_inspections || 0}`, 14, 52);
-  doc.text(`Excellent: ${reportData.summary.excellent || 0}`, 70, 52);
-  doc.text(`Good: ${reportData.summary.good || 0}`, 110, 52);
-  doc.text(`Fair: ${reportData.summary.fair || 0}`, 145, 52);
-  doc.text(`Poor: ${reportData.summary.poor || 0}`, 180, 52);
-  
-  // Legend
-  doc.setFontSize(9);
-  doc.setTextColor(100);
-  doc.text('Condition: Excellent / Good / Fair / Poor | Checklist: OK / Not OK / Pending', 14, 60);
-  
+  const doc = new jsPDF({ orientation: 'portrait' });
+
   const inspections = Array.isArray(reportData?.inspections) ? reportData.inspections : [];
-  
-  // Get unique checklist names from all inspections (limit to 3)
   const checklistNames = Array.from(
     new Set(
       inspections
@@ -116,100 +81,147 @@ export const generateInspectionReport = (reportData, filters = {}, options = {})
         .map((c) => String(c.checklist_name || '').trim())
         .filter(Boolean)
     )
-  ).sort((a, b) => a.localeCompare(b)).slice(0, 3);
+  ).sort((a, b) => a.localeCompare(b));
+
+  // Header
+  doc.setFontSize(18);
+  doc.setTextColor(16, 185, 129);
+  doc.text('Inspection Report', 14, 22);
+
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Period: ${reportData.summary.date_range || 'N/A'}`, 14, 30);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 36);
+  doc.text(`Filters: ${getFilterSummary(filters)}`, 14, 42);
+
+
+
+  // Legend
+  doc.setFontSize(8);
+  doc.setTextColor(100);
   
-  // Helper to format checklist status
+  // Helper functions
   const formatStatus = (val) => {
     const n = val === null || val === undefined ? null : Number(val);
-    if (n === 1) return 'OK';
-    if (n === 0) return 'Not OK';
-    return 'Pending';
+    if (n === 1) return '✓ OK';
+    if (n === 0) return '✗ Not OK';
+    return '- Pending';
   };
-  
-  // Build table header and body
-  const head = [['Room', 'Condition', ...checklistNames, 'Remarks', 'Inspected By', 'Date']];
-  
-  const body = inspections.map((insp) => {
-    const checklist = Array.isArray(insp.checklist) ? insp.checklist : [];
-    const checklistStatus = checklistNames.map((name) => {
-      const item = checklist.find((c) => String(c.checklist_name || '').trim() === name);
-      return formatStatus(item?.operation_is_functional);
-    });
-    
-    return [
-      String(insp.room_number || ''),
-      String(insp.assigned_status || 'N/A').toUpperCase(),
-      ...checklistStatus,
-      insp.assigned_remarks || '-',
-      insp.inspected_by || '-',
-      formatDate(insp.inspected_date)
-    ];
-  });
-  
-  // Color definitions
+
   const conditionColors = {
     excellent: { fill: [16, 185, 129], text: [255, 255, 255] },
     good: { fill: [59, 130, 246], text: [255, 255, 255] },
     fair: { fill: [245, 158, 11], text: [255, 255, 255] },
     poor: { fill: [239, 68, 68], text: [255, 255, 255] },
   };
-  
-  const okFill = [236, 253, 245];
-  const noFill = [255, 241, 242];
-  const pendingFill = [248, 250, 252];
-  const okText = [4, 120, 87];
-  const noText = [190, 18, 60];
-  const pendingText = [71, 85, 105];
-  
-  // Dynamic column widths
-  const checklistCount = checklistNames.length;
-  const colStyles = {
-    0: { cellWidth: 18, fontStyle: 'bold' },
-    1: { cellWidth: 24 },
-    [2 + checklistCount]: { cellWidth: 35 },
-    [3 + checklistCount]: { cellWidth: 28 },
-    [4 + checklistCount]: { cellWidth: 22 },
+
+  const statusTextColors = {
+    '✓ OK': [4, 120, 87],
+    '✗ Not OK': [190, 18, 60],
+    '- Pending': [100, 100, 100],
   };
-  
-  autoTable(doc, {
-    startY: 68,
-    head,
-    body,
-    theme: 'grid',
-    headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-    styles: { fontSize: 7, cellPadding: 2, valign: 'middle', overflow: 'linebreak' },
-    columnStyles: colStyles,
-    didParseCell: (data) => {
-      if (data.section !== 'body') return;
-      
-      // Condition column color coding
-      if (data.column.index === 1) {
-        const condition = String(data.cell.text?.[0] || '').toLowerCase();
-        if (conditionColors[condition]) {
-          data.cell.styles.fillColor = conditionColors[condition].fill;
-          data.cell.styles.textColor = conditionColors[condition].text;
-          data.cell.styles.fontStyle = 'bold';
-        }
+
+  let currentY = 90;
+  const pageHeight = 280;
+  const cardPadding = 4;
+
+  // Render each inspection as a card
+  inspections.forEach((insp, index) => {
+    const checklist = Array.isArray(insp.checklist) ? insp.checklist : [];
+    const activeChecklists = checklist.filter(c => c.operation_is_functional !== null);
+    const pendingCount = checklist.length - activeChecklists.length;
+
+    // Calculate card height
+    const checklistRows = Math.ceil(checklist.length / 2);
+    const hasRemarks = insp.assigned_remarks && insp.assigned_remarks.trim();
+    const cardHeight = 20 + (checklistRows * 6) + (hasRemarks ? 10 : 0);
+
+    // Check page break
+    if (currentY + cardHeight > pageHeight) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    // Card border (no colored header)
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(200, 200, 200);
+    doc.rect(14, currentY, 182, cardHeight, 'FD');
+
+    // Card header (no background color, just text)
+    const condition = String(insp.assigned_status || 'N/A').toLowerCase();
+    const headerText = `#${index + 1}  Room ${insp.room_number || 'N/A'} • ${condition.toUpperCase()}`;
+
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont(undefined, 'bold');
+    doc.text(headerText, 18, currentY + 8);
+
+    // Date and Inspector (right-aligned)
+    doc.setFontSize(8);
+    doc.setFont(undefined, 'normal');
+    const dateStr = formatDate(insp.inspected_date);
+    const inspectorStr = insp.inspected_by || '-';
+    const rightText = `${dateStr} • ${inspectorStr}`;
+    const rightTextWidth = doc.getTextWidth(rightText);
+    doc.text(rightText, 192 - rightTextWidth, currentY + 8);
+
+    // Checklist items - 2 column layout
+    let checklistY = currentY + 18;
+    doc.setFontSize(8);
+
+    for (let i = 0; i < checklist.length; i += 2) {
+      const leftItem = checklist[i];
+      const rightItem = checklist[i + 1];
+
+      // Left column
+      if (leftItem) {
+        const status = formatStatus(leftItem.operation_is_functional);
+        const statusColor = statusTextColors[status] || [100, 100, 100];
+        doc.setTextColor(71, 85, 105);
+        doc.text(`${leftItem.checklist_name}:`, 18, checklistY);
+        doc.setTextColor(...statusColor);
+        doc.text(status, 50, checklistY);
       }
-      
-      // Checklist columns color coding (columns 2 to 2+checklistCount-1)
-      if (data.column.index >= 2 && data.column.index < 2 + checklistCount) {
-        const val = String(data.cell.text?.[0] || '').toLowerCase();
-        if (val === 'ok') {
-          data.cell.styles.fillColor = okFill;
-          data.cell.styles.textColor = okText;
-        } else if (val === 'not ok') {
-          data.cell.styles.fillColor = noFill;
-          data.cell.styles.textColor = noText;
-        } else {
-          data.cell.styles.fillColor = pendingFill;
-          data.cell.styles.textColor = pendingText;
-        }
+
+      // Right column
+      if (rightItem) {
+        const status = formatStatus(rightItem.operation_is_functional);
+        const statusColor = statusTextColors[status] || [100, 100, 100];
+        doc.setTextColor(71, 85, 105);
+        doc.text(`${rightItem.checklist_name}:`, 100, checklistY);
+        doc.setTextColor(...statusColor);
+        doc.text(status, 132, checklistY);
       }
-    },
-    margin: { left: 14, right: 14 },
+
+      checklistY += 6;
+    }
+
+    // Pending count if applicable
+    if (pendingCount > 0) {
+      doc.setTextColor(100, 100, 100);
+      doc.setFontSize(7);
+      doc.text(`(${pendingCount} pending)`, 18, checklistY);
+      checklistY += 4;
+    }
+
+    // Remarks
+    if (hasRemarks) {
+      doc.setTextColor(71, 85, 105);
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'italic');
+      doc.text(`Remarks: ${insp.assigned_remarks}`, 18, checklistY + 4);
+      doc.setFont(undefined, 'normal');
+    }
+
+    // Separator line
+    if (index < inspections.length - 1) {
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, currentY + cardHeight, 196, currentY + cardHeight);
+    }
+
+    currentY += cardHeight + cardPadding;
   });
-  
+
   finalizePdf(doc, `inspection-report-${Date.now()}.pdf`, options);
 };
 

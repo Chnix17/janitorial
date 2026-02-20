@@ -95,19 +95,19 @@ export default function AdminActivity() {
     setCurrentPage(1);
   }, [search]);
 
-  const stats = useMemo(() => {
-    const totalStudents = rows.length;
-    const active = rows.filter((r) => !!r.is_active_on_date).length;
-    const inactive = totalStudents - active;
-    const totalRooms = rows.reduce((s, r) => s + (Number(r.rooms_inspected) || 0), 0);
-    const totalOps = rows.reduce((s, r) => s + (Number(r.activity_count) || 0), 0);
-    return { totalStudents, active, inactive, totalRooms, totalOps };
-  }, [rows]);
 
   const fmtDate = (val) => {
     if (!val) return '';
-    const d = new Date(val);
-    if (Number.isNaN(d.getTime())) return String(val);
+    const raw = String(val);
+    const ymdOnly = /^\d{4}-\d{2}-\d{2}$/;
+    if (ymdOnly.test(raw)) {
+      const [y, m, d] = raw.split('-').map(Number);
+      const utc = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+      return utc.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+    }
+
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return raw;
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
@@ -131,7 +131,7 @@ export default function AdminActivity() {
     return d;
   };
 
-  const listDatesInclusive = (startYmd, endYmd) => {
+  const listDatesInclusive = useCallback((startYmd, endYmd) => {
     const out = [];
     const s = new Date(`${startYmd}T00:00:00`);
     const e = new Date(`${endYmd}T00:00:00`);
@@ -146,7 +146,7 @@ export default function AdminActivity() {
       if (out.length > 370) break;
     }
     return out;
-  };
+  }, []);
 
   
 
@@ -201,13 +201,8 @@ export default function AdminActivity() {
     return (assignments || []).find((a) => String(a.assigned_id) === id) || null;
   }, [assignments, selectedAssignmentId]);
 
-  const rangeTotals = useMemo(() => {
-    const totalMissedRooms = (rangeDays || []).reduce((s, d) => s + (Number(d.missed_rooms) || 0), 0);
-    const totalInspectedRooms = (rangeDays || []).reduce((s, d) => s + (Number(d.inspected_rooms) || 0), 0);
-    return { totalMissedRooms, totalInspectedRooms };
-  }, [rangeDays]);
 
-  const loadAssignmentRange = async () => {
+  const loadAssignmentRange = useCallback(async () => {
     const a = selectedAssignment;
     if (!a?.assigned_user_id || !a?.assigned_floor_building_id || !a?.assigned_start_date || !a?.assigned_end_date) {
       setRangeSummary(null);
@@ -319,7 +314,17 @@ export default function AdminActivity() {
     } finally {
       setRangeLoading(false);
     }
-  };
+  }, [baseUrl, selectedAssignment, listDatesInclusive]);
+
+  useEffect(() => {
+    if (viewMode !== 'assignment') return;
+    if (!selectedAssignmentId) {
+      setRangeSummary(null);
+      setRangeDays([]);
+      return;
+    }
+    loadAssignmentRange();
+  }, [loadAssignmentRange, selectedAssignmentId, viewMode]);
 
 
   const openInspectionsModal = async (userId, selectedDate) => {
@@ -371,8 +376,8 @@ export default function AdminActivity() {
           <p className="mt-1 text-sm text-slate-500">Monitor each student’s inspection activity and drill into details.</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="inline-flex w-full items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 sm:w-auto">
             <button
               type="button"
               className={viewMode === 'daily'
@@ -398,17 +403,18 @@ export default function AdminActivity() {
             value={date}
             onChange={(e) => setDate(e.target.value)}
             disabled={viewMode !== 'daily'}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:opacity-60"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:opacity-60 sm:w-auto"
           />
           <button
             type="button"
             onClick={viewMode === 'daily' ? loadSummary : loadAssignmentRange}
             disabled={viewMode === 'daily' ? loading : (rangeLoading || !selectedAssignmentId)}
-            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+            className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60 sm:w-auto"
           >
             {(viewMode === 'daily' ? loading : rangeLoading) ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
+
       </div>
 
       {viewMode === 'assignment' ? (
@@ -420,16 +426,16 @@ export default function AdminActivity() {
                 <div className="mt-1 text-xs text-slate-500">
                   {rangeSummary
                     ? `${rangeSummary.studentName} • ${rangeSummary.buildingName} • ${rangeSummary.floorName} • ${fmtDate(rangeSummary.start)} - ${fmtDate(rangeSummary.end)}`
-                    : 'Select an assignment then click “View Progress”.'}
+                    : 'Select an assignment to view progress.'}
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
                 <select
                   value={selectedAssignmentId}
                   onChange={(e) => setSelectedAssignmentId(e.target.value)}
-                  className="min-w-[320px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                  disabled={assignmentsLoading}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 sm:w-auto sm:min-w-[320px]"
+                  disabled={assignmentsLoading || rangeLoading}
                 >
                   <option value="">Select assignment…</option>
                   {(assignments || []).map((a) => (
@@ -438,151 +444,92 @@ export default function AdminActivity() {
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  onClick={loadAssignmentRange}
-                  disabled={rangeLoading || !selectedAssignmentId}
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-                >
-                  {rangeLoading ? 'Loading…' : 'View Progress'}
-                </button>
               </div>
 
              
             </div>
 
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Days in Range</div>
-                <div className="mt-2 text-2xl font-semibold text-slate-900">{rangeLoading ? '—' : (rangeSummary?.dayCount ?? '—')}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Rooms / Day</div>
-                <div className="mt-2 text-2xl font-semibold text-slate-900">{rangeLoading ? '—' : (rangeSummary?.roomCount ?? '—')}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Rooms Inspected</div>
-                <div className="mt-2 text-2xl font-semibold text-slate-900">{rangeLoading ? '—' : (rangeSummary?.roomsInspected ?? '—')}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Progress</div>
-                <div className={`mt-2 text-2xl font-semibold ${(rangeSummary?.progressPct ?? 0) > 66 ? 'text-emerald-700' : (rangeSummary?.progressPct ?? 0) > 33 ? 'text-amber-700' : 'text-rose-700'}`}>
-                  {rangeLoading ? '—' : `${(rangeSummary?.progressPct ?? 0).toFixed(0)}%`}
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
+             
+
+              <div className="w-full overflow-x-auto">
+                <div className="min-w-[520px]">
+                  <div className="grid grid-cols-[1fr_140px_120px_120px] gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-500">
+                    <div>Date</div>
+                    <div>Location</div>
+                    <div>Inspected</div>
+                    <div>Missed</div>
+                  </div>
+
+                  <div>
+                    {rangeLoading ? (
+                      <div className="px-5 py-6 text-sm text-slate-500">Loading range…</div>
+                    ) : !selectedAssignmentId ? (
+                      <div className="px-5 py-6 text-sm text-slate-500">Select an assignment then click “View Progress”.</div>
+                    ) : rangeDays.length === 0 ? (
+                      <div className="px-5 py-6 text-sm text-slate-500">No days to show in this range.</div>
+                    ) : (
+                      paginatedRangeDays.map((d) => {
+                        const inspected = Number(d.inspected_rooms) || 0;
+                        const missed = Number(d.missed_rooms) || 0;
+                        const total = Number(d.total_rooms) || 0;
+                        return (
+                          <button
+                            key={d.date}
+                            type="button"
+                            onClick={() => openInspectionsModal(selectedAssignment.assigned_user_id, d.date)}
+                            className="grid w-full grid-cols-[1fr_140px_120px_120px] items-center gap-2 border-b border-slate-100 px-5 py-4 text-left hover:bg-slate-50"
+                          >
+                            <div className="text-sm font-medium text-slate-900">{fmtDate(d.date)}</div>
+                            <div className="text-sm text-slate-600">{rangeSummary?.floorName || '—'}</div>
+                            <div className="text-sm text-slate-600">{inspected}/{total}</div>
+                            <div className="text-sm font-semibold text-rose-700">{missed}</div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
-              <div>
-                <div className="text-sm font-semibold text-slate-900">Assignment Days</div>
-                <div className="mt-1 text-xs text-slate-500">One entry per day. Click a day to open room checklist details.</div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">{rangeLoading ? '—' : `${rangeTotals.totalInspectedRooms} inspected`}</div>
-                <div className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">{rangeLoading ? '—' : `${rangeTotals.totalMissedRooms} missed`}</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-[1fr_140px_120px_120px] gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-500">
-              <div>Date</div>
-              <div>Location</div>
-              <div>Inspected</div>
-              <div>Missed</div>
-            </div>
-
-            <div>
-              {rangeLoading ? (
-                <div className="px-5 py-6 text-sm text-slate-500">Loading range…</div>
-              ) : !selectedAssignmentId ? (
-                <div className="px-5 py-6 text-sm text-slate-500">Select an assignment then click “View Progress”.</div>
-              ) : rangeDays.length === 0 ? (
-                <div className="px-5 py-6 text-sm text-slate-500">No days to show in this range.</div>
-              ) : (
-                paginatedRangeDays.map((d) => {
-                  const inspected = Number(d.inspected_rooms) || 0;
-                  const missed = Number(d.missed_rooms) || 0;
-                  const total = Number(d.total_rooms) || 0;
-                  return (
-                    <button
-                      key={d.date}
-                      type="button"
-                      onClick={() => openInspectionsModal(selectedAssignment.assigned_user_id, d.date)}
-                      className="grid w-full grid-cols-[1fr_140px_120px_120px] items-center gap-2 border-b border-slate-100 px-5 py-4 text-left hover:bg-slate-50"
-                    >
-                      <div className="text-sm font-medium text-slate-900">{fmtDate(d.date)}</div>
-                      <div className="text-sm text-slate-600">{rangeSummary?.floorName || '—'}</div>
-                      <div className="text-sm text-slate-600">{inspected}/{total}</div>
-                      <div className="text-sm font-semibold text-rose-700">{missed}</div>
-                    </button>
-                  );
-                })
+              {/* Assignment Range Pagination Controls */}
+              {rangeTotalPages > 1 && (
+                <div className="border-t border-slate-200 bg-slate-50 px-5 py-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-sm text-slate-600">
+                      Showing <span className="font-semibold text-slate-900">{rangeStartItem}</span> to <span className="font-semibold text-slate-900">{rangeEndItem}</span> of <span className="font-semibold text-slate-900">{rangeDays.length}</span> days
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRangeCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={rangeCurrentPage === 1}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      <span className="px-3 py-1 text-sm text-slate-600">
+                        Page <span className="font-semibold text-slate-900">{rangeCurrentPage}</span> of <span className="font-semibold text-slate-900">{rangeTotalPages}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRangeCurrentPage(prev => Math.min(prev + 1, rangeTotalPages))}
+                        disabled={rangeCurrentPage === rangeTotalPages}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
-
-            {/* Assignment Range Pagination Controls */}
-            {rangeTotalPages > 1 && (
-              <div className="border-t border-slate-200 bg-slate-50 px-5 py-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-sm text-slate-600">
-                    Showing <span className="font-semibold text-slate-900">{rangeStartItem}</span> to <span className="font-semibold text-slate-900">{rangeEndItem}</span> of <span className="font-semibold text-slate-900">{rangeDays.length}</span> days
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRangeCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={rangeCurrentPage === 1}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      Previous
-                    </button>
-                    <span className="px-3 py-1 text-sm text-slate-600">
-                      Page <span className="font-semibold text-slate-900">{rangeCurrentPage}</span> of <span className="font-semibold text-slate-900">{rangeTotalPages}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setRangeCurrentPage(prev => Math.min(prev + 1, rangeTotalPages))}
-                      disabled={rangeCurrentPage === rangeTotalPages}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </>
       ) : null}
 
       {viewMode === 'daily' ? (
         <>
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Students</div>
-          <div className="mt-2 text-2xl font-semibold text-slate-900">{loading ? '—' : stats.totalStudents}</div>
-        </div>
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Active</div>
-          <div className="mt-2 text-2xl font-semibold text-emerald-700">{loading ? '—' : stats.active}</div>
-        </div>
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Inactive</div>
-          <div className="mt-2 text-2xl font-semibold text-amber-700">{loading ? '—' : stats.inactive}</div>
-        </div>
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Rooms Inspected</div>
-          <div className="mt-2 text-2xl font-semibold text-slate-900">{loading ? '—' : stats.totalRooms}</div>
-        </div>
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Checklist Ops</div>
-          <div className="mt-2 text-2xl font-semibold text-slate-900">{loading ? '—' : stats.totalOps}</div>
-        </div>
-      </div>
-
-
       <div className="mt-5">
         <div className="rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
@@ -607,7 +554,7 @@ export default function AdminActivity() {
               const active = !!r.is_active_on_date;
               return (
                 <button
-                  key={r.user_id}
+                  key={r.assigned_id}
                   type="button"
                   onClick={() => openInspectionsModal(r.user_id, date)}
                   className={'w-full px-5 py-4 text-left hover:bg-slate-50'}
@@ -616,7 +563,7 @@ export default function AdminActivity() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-slate-900">{r.full_name}</div>
-                 
+                        <div className="mt-1 text-xs text-slate-500">{r.building_name} • {r.floor_name}</div>
                         <div className="mt-1 text-xs text-slate-500">Last activity: {r.last_activity_at ? fmtTime(r.last_activity_at) : '—'}</div>
                       </div>
 
@@ -757,9 +704,37 @@ export default function AdminActivity() {
                             <div className="mt-2 grid gap-2">
                               {insp.checklist.map((item, j) => {
                                 const v = item.operation_is_functional;
-                                const n = v === null || v === undefined ? null : Number(v);
-                                const label = n === 1 ? 'OK' : n === 0 ? 'Not OK' : 'Pending';
-                                const cls = n === 1 ? 'text-emerald-600' : n === 0 ? 'text-rose-600' : 'text-slate-500';
+                                const itemType = item.checklist_type || 'boolean';
+                                const expectedQty = item.checklist_quantity;
+
+                                let label, cls;
+
+                                if (itemType === 'quantity') {
+                                  const numVal = v !== null && v !== undefined ? Number(v) : null;
+                                  if (numVal !== null && !isNaN(numVal)) {
+                                    const match = numVal === Number(expectedQty);
+                                    label = `${numVal} / ${expectedQty}`;
+                                    cls = match ? 'text-emerald-600' : 'text-amber-600';
+                                  } else {
+                                    label = `— / ${expectedQty}`;
+                                    cls = 'text-slate-500';
+                                  }
+                                } else if (itemType === 'condition') {
+                                  if (v !== null && v !== undefined && String(v).trim() !== '') {
+                                    const goodOptions = ['good', 'clean', 'working', 'functional', 'ok'];
+                                    const isGood = goodOptions.some(g => String(v).toLowerCase().includes(g));
+                                    label = String(v).charAt(0).toUpperCase() + String(v).slice(1);
+                                    cls = isGood ? 'text-emerald-600' : 'text-amber-600';
+                                  } else {
+                                    label = 'Pending';
+                                    cls = 'text-slate-500';
+                                  }
+                                } else {
+                                  // Boolean
+                                  const n = v === null || v === undefined ? null : Number(v);
+                                  label = n === 1 ? 'OK' : n === 0 ? 'Not OK' : 'Pending';
+                                  cls = n === 1 ? 'text-emerald-600' : n === 0 ? 'text-rose-600' : 'text-slate-500';
+                                }
 
                                 return (
                                   <div key={j} className="flex items-center justify-between text-sm">

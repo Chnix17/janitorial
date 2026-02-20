@@ -79,23 +79,23 @@
 
      public function getRoomChecklists($data) {
          try {
-             if (!is_array($data) || !isset($data['room_id'])) {
+             if (!is_array($data) || !isset($data['floorbuilding_id'])) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Missing required field: room_id'
+                     'message' => 'Missing required field: floorbuilding_id'
                  ]);
              }
 
-             $room_id = (int)$data['room_id'];
-             if ($room_id <= 0) {
+             $floorbuilding_id = (int)$data['floorbuilding_id'];
+             if ($floorbuilding_id <= 0) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Invalid room_id.'
+                     'message' => 'Invalid floorbuilding_id.'
                  ]);
              }
 
-             $stmt = $this->conn->prepare('SELECT checklist_id, checklist_name, checklist_room_id FROM tblroomchecklist WHERE checklist_room_id = ? ORDER BY checklist_name ASC');
-             $stmt->execute([$room_id]);
+             $stmt = $this->conn->prepare('SELECT checklist_id, checklist_name, checklist_floorbuilding_id, checklist_type, checklist_quantity, checklist_options FROM tblroomchecklist WHERE checklist_floorbuilding_id = ? ORDER BY checklist_name ASC');
+             $stmt->execute([$floorbuilding_id]);
              $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
              return json_encode([
@@ -179,20 +179,23 @@
 
      public function createChecklist($data) {
          try {
-             if (!is_array($data) || !isset($data['checklist_room_id'], $data['checklist_name'])) {
+             if (!is_array($data) || !isset($data['checklist_floorbuilding_id'], $data['checklist_name'])) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Missing required fields: checklist_room_id, checklist_name'
+                     'message' => 'Missing required fields: checklist_floorbuilding_id, checklist_name'
                  ]);
              }
 
-             $room_id = (int)$data['checklist_room_id'];
+             $floorbuilding_id = (int)$data['checklist_floorbuilding_id'];
              $name = trim((string)$data['checklist_name']);
+             $type = isset($data['checklist_type']) ? $data['checklist_type'] : 'boolean';
+             $quantity = isset($data['checklist_quantity']) ? (int)$data['checklist_quantity'] : null;
+             $options = isset($data['checklist_options']) ? trim((string)$data['checklist_options']) : null;
 
-             if ($room_id <= 0) {
+             if ($floorbuilding_id <= 0) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Invalid checklist_room_id.'
+                     'message' => 'Invalid checklist_floorbuilding_id.'
                  ]);
              }
              if ($name === '') {
@@ -202,26 +205,26 @@
                  ]);
              }
 
-             $checkRoom = $this->conn->prepare('SELECT room_id FROM tblroom WHERE room_id = ?');
-             $checkRoom->execute([$room_id]);
-             if (!$checkRoom->fetch(PDO::FETCH_ASSOC)) {
+             $checkFloor = $this->conn->prepare('SELECT floorbuilding_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
+             $checkFloor->execute([$floorbuilding_id]);
+             if (!$checkFloor->fetch(PDO::FETCH_ASSOC)) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Room not found.'
+                     'message' => 'Floor not found.'
                  ]);
              }
 
-             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_room_id = ? AND LOWER(checklist_name) = LOWER(?)');
-             $checkDup->execute([$room_id, $name]);
+             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_floorbuilding_id = ? AND LOWER(checklist_name) = LOWER(?)');
+             $checkDup->execute([$floorbuilding_id, $name]);
              if ($checkDup->fetch(PDO::FETCH_ASSOC)) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Checklist already exists for this room.'
+                     'message' => 'Checklist already exists for this floor.'
                  ]);
              }
 
-             $stmt = $this->conn->prepare('INSERT INTO tblroomchecklist (checklist_name, checklist_room_id) VALUES (?, ?)');
-             $stmt->execute([$name, $room_id]);
+             $stmt = $this->conn->prepare('INSERT INTO tblroomchecklist (checklist_name, checklist_floorbuilding_id, checklist_type, checklist_quantity, checklist_options) VALUES (?, ?, ?, ?, ?)');
+             $stmt->execute([$name, $floorbuilding_id, $type, $quantity, $options]);
 
              return json_encode([
                  'success' => true,
@@ -247,6 +250,9 @@
 
              $checklist_id = (int)$data['checklist_id'];
              $name = trim((string)$data['checklist_name']);
+             $type = isset($data['checklist_type']) ? $data['checklist_type'] : 'boolean';
+             $quantity = isset($data['checklist_quantity']) ? (int)$data['checklist_quantity'] : null;
+             $options = isset($data['checklist_options']) ? trim((string)$data['checklist_options']) : null;
 
              if ($checklist_id <= 0) {
                  return json_encode([
@@ -261,7 +267,7 @@
                  ]);
              }
 
-             $get = $this->conn->prepare('SELECT checklist_id, checklist_room_id FROM tblroomchecklist WHERE checklist_id = ?');
+             $get = $this->conn->prepare('SELECT checklist_id, checklist_floorbuilding_id FROM tblroomchecklist WHERE checklist_id = ?');
              $get->execute([$checklist_id]);
              $existing = $get->fetch(PDO::FETCH_ASSOC);
              if (!$existing) {
@@ -271,18 +277,18 @@
                  ]);
              }
 
-             $room_id = (int)$existing['checklist_room_id'];
-             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_room_id = ? AND LOWER(checklist_name) = LOWER(?) AND checklist_id <> ?');
-             $checkDup->execute([$room_id, $name, $checklist_id]);
+             $floorbuilding_id = (int)$existing['checklist_floorbuilding_id'];
+             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_floorbuilding_id = ? AND LOWER(checklist_name) = LOWER(?) AND checklist_id <> ?');
+             $checkDup->execute([$floorbuilding_id, $name, $checklist_id]);
              if ($checkDup->fetch(PDO::FETCH_ASSOC)) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Checklist already exists for this room.'
+                     'message' => 'Checklist already exists for this floor.'
                  ]);
              }
 
-             $stmt = $this->conn->prepare('UPDATE tblroomchecklist SET checklist_name = ? WHERE checklist_id = ?');
-             $stmt->execute([$name, $checklist_id]);
+             $stmt = $this->conn->prepare('UPDATE tblroomchecklist SET checklist_name = ?, checklist_type = ?, checklist_quantity = ?, checklist_options = ? WHERE checklist_id = ?');
+             $stmt->execute([$name, $type, $quantity, $options, $checklist_id]);
 
              return json_encode([
                  'success' => true,
@@ -339,48 +345,62 @@
 
      public function createChecklistBulk($data) {
          try {
-             if (!is_array($data) || !isset($data['checklist_room_id'], $data['checklist_names'])) {
+             if (!is_array($data) || !isset($data['checklist_floorbuilding_id'])) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Missing required fields: checklist_room_id, checklist_names'
+                     'message' => 'Missing required field: checklist_floorbuilding_id'
                  ]);
              }
 
-             $room_id = (int)$data['checklist_room_id'];
-             $names = $data['checklist_names'];
-
-             if ($room_id <= 0) {
+             $floorbuilding_id = (int)$data['checklist_floorbuilding_id'];
+             if ($floorbuilding_id <= 0) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Invalid checklist_room_id.'
-                 ]);
-             }
-             if (!is_array($names) || count($names) === 0) {
-                 return json_encode([
-                     'success' => false,
-                     'message' => 'checklist_names must be a non-empty array.'
+                     'message' => 'Invalid checklist_floorbuilding_id.'
                  ]);
              }
 
-             $checkRoom = $this->conn->prepare('SELECT room_id FROM tblroom WHERE room_id = ?');
-             $checkRoom->execute([$room_id]);
-             if (!$checkRoom->fetch(PDO::FETCH_ASSOC)) {
+             $items = [];
+             if (isset($data['items']) && is_array($data['items'])) {
+                 foreach ($data['items'] as $item) {
+                     $name = trim((string)($item['checklist_name'] ?? ''));
+                     if ($name === '') continue;
+                     $items[] = [
+                         'name' => $name,
+                         'type' => $item['checklist_type'] ?? 'boolean',
+                         'quantity' => isset($item['checklist_quantity']) ? (int)$item['checklist_quantity'] : null,
+                         'options' => isset($item['checklist_options']) ? trim((string)$item['checklist_options']) : null
+                     ];
+                 }
+             } elseif (isset($data['checklist_names']) && is_array($data['checklist_names'])) {
+                 $type = isset($data['checklist_type']) ? $data['checklist_type'] : 'boolean';
+                 $quantity = isset($data['checklist_quantity']) ? (int)$data['checklist_quantity'] : null;
+                 $options = isset($data['checklist_options']) ? trim((string)$data['checklist_options']) : null;
+                 foreach ($data['checklist_names'] as $n) {
+                     $name = trim((string)$n);
+                     if ($name === '') continue;
+                     $items[] = [
+                         'name' => $name,
+                         'type' => $type,
+                         'quantity' => $quantity,
+                         'options' => $options
+                     ];
+                 }
+             }
+
+             if (count($items) === 0) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Room not found.'
+                     'message' => 'No valid checklist items provided.'
                  ]);
              }
 
-             $normalized = [];
-             foreach ($names as $n) {
-                 $value = trim((string)$n);
-                 if ($value === '') continue;
-                 $normalized[strtolower($value)] = $value;
-             }
-             if (count($normalized) === 0) {
+             $checkFloor = $this->conn->prepare('SELECT floorbuilding_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
+             $checkFloor->execute([$floorbuilding_id]);
+             if (!$checkFloor->fetch(PDO::FETCH_ASSOC)) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'No valid checklist names provided.'
+                     'message' => 'Floor not found.'
                  ]);
              }
 
@@ -389,16 +409,18 @@
              $inserted = 0;
              $skipped = [];
 
-             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_room_id = ? AND LOWER(checklist_name) = LOWER(?)');
-             $ins = $this->conn->prepare('INSERT INTO tblroomchecklist (checklist_name, checklist_room_id) VALUES (?, ?)');
+             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_floorbuilding_id = ? AND LOWER(checklist_name) = LOWER(?)');
+             $ins = $this->conn->prepare('INSERT INTO tblroomchecklist (checklist_name, checklist_floorbuilding_id, checklist_type, checklist_quantity, checklist_options) VALUES (?, ?, ?, ?, ?)');
 
-             foreach ($normalized as $val) {
-                 $checkDup->execute([$room_id, $val]);
+             foreach ($items as $item) {
+                 $checkDup->execute([$floorbuilding_id, $item['name']]);
                  if ($checkDup->fetch(PDO::FETCH_ASSOC)) {
-                     $skipped[] = $val;
+                     $skipped[] = $item['name'];
                      continue;
                  }
-                 $ins->execute([$val, $room_id]);
+                 $qty = ($item['type'] === 'quantity') ? $item['quantity'] : null;
+                 $opts = ($item['type'] === 'condition') ? $item['options'] : null;
+                 $ins->execute([$item['name'], $floorbuilding_id, $item['type'], $qty, $opts]);
                  $inserted++;
              }
 
@@ -1737,32 +1759,41 @@
 
              $stmt = $this->conn->prepare('
                  SELECT
-                     u.user_id,
+                     a.assigned_id,
+                     a.assigned_user_id,
                      u.full_name,
                      u.username,
+                     b.building_name,
+                     f.floor_name,
+                     a.assigned_start_date,
+                     a.assigned_end_date,
+                     bf.floorbuilding_id,
                      COALESCE(op.activity_count, 0) AS activity_count,
                      COALESCE(st.rooms_inspected, 0) AS rooms_inspected,
                      op.last_operation_at,
                      st.last_inspection_at
-                 FROM tbluser u
+                 FROM tblassigned a
+                 JOIN tbluser u ON u.user_id = a.assigned_user_id
                  JOIN tblrole r ON r.role_id = u.role_id
+                 JOIN tblbuildingfloor bf ON bf.floorbuilding_id = a.assigned_floor_building_id
+                 JOIN tblbuilding b ON b.building_id = bf.building_id
+                 JOIN tblfloor f ON f.floor_id = bf.floor_id
                  LEFT JOIN (
-                     SELECT operation_updated_by, COUNT(*) AS activity_count, MAX(operation_updated_at) AS last_operation_at
+                     SELECT operation_assigned_id, COUNT(*) AS activity_count, MAX(operation_updated_at) AS last_operation_at
                      FROM tblassignedoperation
-                     WHERE DATE(operation_updated_at) = ?
-                     GROUP BY operation_updated_by
-                 ) op ON op.operation_updated_by = u.user_id
+                     GROUP BY operation_assigned_id
+                 ) op ON op.operation_assigned_id = a.assigned_id
                  LEFT JOIN (
-                     SELECT assigned_reported_by, COUNT(*) AS rooms_inspected, MAX(assigned_updated_at) AS last_inspection_at
+                     SELECT assigned_id, COUNT(*) AS rooms_inspected, MAX(assigned_updated_at) AS last_inspection_at
                      FROM tblassignedstatus
-                     WHERE completion_date = ?
-                     GROUP BY assigned_reported_by
-                 ) st ON st.assigned_reported_by = u.user_id
+                     GROUP BY assigned_id
+                 ) st ON st.assigned_id = a.assigned_id
                  WHERE LOWER(r.role_name) = LOWER(?)
                    AND (u.is_active = 1 OR u.is_active = "1")
-                 ORDER BY u.full_name ASC
+                   AND (a.assigned_status_enum IS NULL OR LOWER(a.assigned_status_enum) != "completed")
+                 ORDER BY u.full_name ASC, a.assigned_id ASC
              ');
-             $stmt->execute([$date, $date, 'Student']);
+             $stmt->execute(['Student']);
              $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
              $out = [];
@@ -1782,9 +1813,14 @@
                  $roomsInspected = (int)($r['rooms_inspected'] ?? 0);
 
                  $out[] = [
-                     'user_id' => (int)$r['user_id'],
+                     'assigned_id' => (int)$r['assigned_id'],
+                     'user_id' => (int)$r['assigned_user_id'],
                      'full_name' => $r['full_name'],
                      'username' => $r['username'],
+                     'building_name' => $r['building_name'],
+                     'floor_name' => $r['floor_name'],
+                     'assigned_start_date' => $r['assigned_start_date'],
+                     'assigned_end_date' => $r['assigned_end_date'],
                      'activity_count' => $activityCount,
                      'rooms_inspected' => $roomsInspected,
                      'last_activity_at' => $lastActivityAt,
@@ -1889,12 +1925,15 @@
 
              $checklistStmt = $this->conn->prepare('
                  SELECT
-                     c.checklist_room_id AS room_id,
+                     r.room_id,
                      c.checklist_id,
                      c.checklist_name,
+                     c.checklist_type,
+                     c.checklist_quantity,
                      o.operation_is_functional,
                      o.operation_updated_at
-                 FROM tblroomchecklist c
+                 FROM tblroom r
+                 JOIN tblroomchecklist c ON c.checklist_floorbuilding_id = r.room_building_floor_id
                  LEFT JOIN (
                      SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_updated_at
                      FROM tblassignedoperation ao1
@@ -1909,10 +1948,10 @@
                          AND ao2.max_updated_at = ao1.operation_updated_at
                      WHERE ao1.operation_updated_by = ? AND DATE(ao1.operation_updated_at) = ?
                  ) o
-                     ON o.operation_room_id = c.checklist_room_id
+                     ON o.operation_room_id = r.room_id
                      AND o.operation_checklist_id = c.checklist_id
-                 WHERE c.checklist_room_id IN (' . $placeholders . ')
-                 ORDER BY c.checklist_room_id ASC, c.checklist_name ASC
+                 WHERE r.room_id IN (' . $placeholders . ')
+                 ORDER BY r.room_id ASC, c.checklist_name ASC
              ');
 
              $params = [$user_id, $date, $user_id, $date];

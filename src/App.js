@@ -84,7 +84,7 @@ function App() {
             <Route path="Activity" element={<Activity />} />
           </Route>
 
-          {/* Lowercase aliases to support navigation/link variations */}
+        
           <Route
             path="/admin"
             element={(
@@ -110,7 +110,7 @@ function App() {
             path="/student"
             element={(
               <ProtectedRoute allowedRoles={['Student']}>
-                <AppShell title="Student" homePath="/student/dashboard" />
+                <AppShell title="Student" homePath="/student/assignments" />
               </ProtectedRoute>
             )}
           >

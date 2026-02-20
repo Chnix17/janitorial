@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  LeftOutlined,
   AppstoreOutlined,
   TeamOutlined,
   BankOutlined,
@@ -118,11 +117,29 @@ export default function Sidebar({ title, homePath, isMobile, isOpen, onOpen, onC
             </div>
             <div className="cc-side-brand-text">
               <div className="cc-side-brand-title">
-                Student Janitorial
-                <span className="cc-side-brand-badge">GSD</span>
+                {user?.full_name || 'User'}
+                <span className="cc-side-brand-badge">{isAdmin ? 'Admin' : 'Student'}</span>
               </div>
             </div>
           </div>
+          {/* Mobile Logout Icon */}
+          {isMobile && (
+            <button
+              type="button"
+              className="cc-mobile-logout-btn"
+              aria-label="Logout"
+              onClick={() => {
+                try {
+                  logout();
+                } finally {
+                  sessionStorage.removeItem('janitorial_userData');
+                  navigate('/login', { replace: true });
+                }
+              }}
+            >
+              <Icon.Logout />
+            </button>
+          )}
         </div>
 
         {/* Navigation */}
@@ -213,30 +230,34 @@ export default function Sidebar({ title, homePath, isMobile, isOpen, onOpen, onC
               {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
             </div>
             <div className="cc-side-user-info">
-              <div className="cc-side-user-name">{user?.full_name || 'User'}</div>
+              {!isMobile && (
+                <div className="cc-side-user-name">{user?.full_name || 'User'}</div>
+              )}
               <div className="cc-side-user-role">
                 {isAdmin ? 'Administrator' : title || user?.role || 'Student'}
               </div>
             </div>
           </div>
 
-          <button
-            className="cc-side-logout"
-            type="button"
-            onClick={() => {
-              try {
-                logout();
-              } finally {
-                sessionStorage.removeItem('janitorial_userData');
-                navigate('/login', { replace: true });
-              }
-            }}
-          >
-            <span className="cc-nav-ico" aria-hidden="true">
-              <Icon.Logout />
-            </span>
-            <span className="cc-nav-text">Logout</span>
-          </button>
+          {!isMobile && (
+            <button
+              className="cc-side-logout"
+              type="button"
+              onClick={() => {
+                try {
+                  logout();
+                } finally {
+                  sessionStorage.removeItem('janitorial_userData');
+                  navigate('/login', { replace: true });
+                }
+              }}
+            >
+              <span className="cc-nav-ico" aria-hidden="true">
+                <Icon.Logout />
+              </span>
+              <span className="cc-nav-text">Logout</span>
+            </button>
+          )}
         </div>
       </aside>
     </>

@@ -2,20 +2,16 @@ import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import NotAuthorize from '../components/NotAuthorize';
 import { SecureStorage } from './encryption';
-
 const ProtectedRoute = ({ children, allowedRoles, requiredDepartment }) => {
     const [showModal, setShowModal] = useState(false);
     const [shouldNavigate, setShouldNavigate] = useState(false);
     const loggedIn = SecureStorage.getLocalItem('janitorial_loggedIn') ?? SecureStorage.getLocalItem('loggedIn');
     const isLoggedIn = loggedIn === 'true' || loggedIn === true;
     const userRole = SecureStorage.getLocalItem('janitorial_user_level') ?? SecureStorage.getLocalItem('user_level');
-    // Fallback to numeric role id when role name is missing
     const userLevelId = SecureStorage.getLocalItem('janitorial_user_level_id') ?? SecureStorage.getLocalItem('user_level_id');
-    // Minimal mapping to ensure Admin access even if only the id is present
     const roleMap = { '1': 'Admin' };
     const resolvedUserRole = userRole || roleMap[String(userLevelId)] || '';
     const userDepartment = SecureStorage.getLocalItem('Department Name');
-
     useEffect(() => {
         if (
             (allowedRoles && !allowedRoles.includes(resolvedUserRole)) ||
@@ -27,10 +23,9 @@ const ProtectedRoute = ({ children, allowedRoles, requiredDepartment }) => {
 
     const handleModalClose = () => {
         setShowModal(false);
-        // Delay navigation until after modal closes
         setTimeout(() => {
             setShouldNavigate(true);
-        }, 300); // 300ms delay to match modal animation
+        }, 300); 
     };
 
     if (!isLoggedIn) {
