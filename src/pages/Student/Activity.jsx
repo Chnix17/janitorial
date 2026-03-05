@@ -1005,14 +1005,49 @@ export default function Activity() {
                         
                         {isChecklistOpen && hasChecklist && (
                           <div className="checklist-dropdown">
-                            {insp.checklist.map((item) => (
-                              <div key={item.checklist_id} className="checklist-item">
-                                <span className="checklist-name">{item.checklist_name}</span>
-                                <span className={`checklist-status ${item.operation_is_functional ? 'ok' : 'not-ok'}`}>
-                                  {item.operation_is_functional ? 'OK' : 'Not OK'}
-                                </span>
-                              </div>
-                            ))}
+                            {insp.checklist.map((item) => {
+                              const itemType = item.checklist_type || 'boolean';
+                              const expectedQty = item.checklist_quantity;
+                              const val = item.operation_is_functional;
+                              
+                              let statusText, statusClass;
+                              
+                              if (itemType === 'quantity') {
+                                const numVal = item.operation_quantity !== null && item.operation_quantity !== undefined ? Number(item.operation_quantity) : null;
+                                if (numVal !== null && !isNaN(numVal)) {
+                                  const match = numVal === Number(expectedQty);
+                                  statusText = `${numVal} / ${expectedQty}`;
+                                  statusClass = match ? 'ok' : 'not-ok';
+                                } else {
+                                  statusText = `— / ${expectedQty}`;
+                                  statusClass = 'not-ok';
+                                }
+                              } else if (itemType === 'condition') {
+                                const conditionVal = item.operation_condition;
+                                if (conditionVal !== null && conditionVal !== undefined && String(conditionVal).trim() !== '') {
+                                  const goodOptions = ['good', 'clean', 'working', 'functional', 'ok'];
+                                  const isGood = goodOptions.some(g => String(conditionVal).toLowerCase().includes(g));
+                                  statusText = String(conditionVal).charAt(0).toUpperCase() + String(conditionVal).slice(1);
+                                  statusClass = isGood ? 'ok' : 'not-ok';
+                                } else {
+                                  statusText = 'Pending';
+                                  statusClass = 'not-ok';
+                                }
+                              } else {
+                                // Boolean (default)
+                                statusText = val ? 'OK' : 'Not OK';
+                                statusClass = val ? 'ok' : 'not-ok';
+                              }
+                              
+                              return (
+                                <div key={item.checklist_id} className="checklist-item">
+                                  <span className="checklist-name">{item.checklist_name}</span>
+                                  <span className={`checklist-status ${statusClass}`}>
+                                    {statusText}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                         

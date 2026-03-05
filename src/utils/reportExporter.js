@@ -100,12 +100,44 @@ export const generateInspectionReport = (reportData, filters = {}, options = {})
   doc.setFontSize(8);
   doc.setTextColor(100);
   
-  // Helper functions
-  const formatStatus = (val) => {
-    const n = val === null || val === undefined ? null : Number(val);
-    if (n === 1) return '✓ OK';
-    if (n === 0) return '✗ Not OK';
-    return '- Pending';
+  // Helper to format checklist item based on type
+  const formatChecklistItem = (item) => {
+    const itemType = item?.checklist_type || 'boolean';
+    const expectedQty = item?.checklist_quantity;
+
+    if (itemType === 'quantity') {
+      const numVal = item?.operation_quantity !== null && item?.operation_quantity !== undefined
+        ? Number(item.operation_quantity)
+        : null;
+      if (numVal !== null && !isNaN(numVal)) {
+        const match = numVal === Number(expectedQty);
+        return {
+          text: `${numVal}/${expectedQty}`,
+          color: match ? [4, 120, 87] : [245, 158, 11] // emerald or amber
+        };
+      }
+      return { text: `-/${expectedQty}`, color: [100, 100, 100] };
+    }
+
+    if (itemType === 'condition') {
+      const conditionVal = item?.operation_condition;
+      if (conditionVal !== null && conditionVal !== undefined && String(conditionVal).trim() !== '') {
+        const goodOptions = ['good', 'clean', 'working', 'functional', 'ok'];
+        const isGood = goodOptions.some(g => String(conditionVal).toLowerCase().includes(g));
+        return {
+          text: String(conditionVal).charAt(0).toUpperCase() + String(conditionVal).slice(1),
+          color: isGood ? [4, 120, 87] : [245, 158, 11]
+        };
+      }
+      return { text: 'Pending', color: [100, 100, 100] };
+    }
+
+    // Boolean (default)
+    const v = item?.operation_is_functional;
+    const n = v === null || v === undefined ? null : Number(v);
+    if (n === 1) return { text: 'OK', color: [4, 120, 87] };
+    if (n === 0) return { text: 'Not OK', color: [190, 18, 60] };
+    return { text: 'Pending', color: [100, 100, 100] };
   };
 
   const conditionColors = {
@@ -116,9 +148,9 @@ export const generateInspectionReport = (reportData, filters = {}, options = {})
   };
 
   const statusTextColors = {
-    '✓ OK': [4, 120, 87],
-    '✗ Not OK': [190, 18, 60],
-    '- Pending': [100, 100, 100],
+    'OK': [4, 120, 87],
+    'Not OK': [190, 18, 60],
+    'Pending': [100, 100, 100],
   };
 
   let currentY = 90;
@@ -175,22 +207,20 @@ export const generateInspectionReport = (reportData, filters = {}, options = {})
 
       // Left column
       if (leftItem) {
-        const status = formatStatus(leftItem.operation_is_functional);
-        const statusColor = statusTextColors[status] || [100, 100, 100];
+        const formatted = formatChecklistItem(leftItem);
         doc.setTextColor(71, 85, 105);
         doc.text(`${leftItem.checklist_name}:`, 18, checklistY);
-        doc.setTextColor(...statusColor);
-        doc.text(status, 50, checklistY);
+        doc.setTextColor(...formatted.color);
+        doc.text(formatted.text, 65, checklistY);
       }
 
       // Right column
       if (rightItem) {
-        const status = formatStatus(rightItem.operation_is_functional);
-        const statusColor = statusTextColors[status] || [100, 100, 100];
+        const formatted = formatChecklistItem(rightItem);
         doc.setTextColor(71, 85, 105);
-        doc.text(`${rightItem.checklist_name}:`, 100, checklistY);
-        doc.setTextColor(...statusColor);
-        doc.text(status, 132, checklistY);
+        doc.text(`${rightItem.checklist_name}:`, 105, checklistY);
+        doc.setTextColor(...formatted.color);
+        doc.text(formatted.text, 152, checklistY);
       }
 
       checklistY += 6;

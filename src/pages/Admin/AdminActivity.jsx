@@ -703,14 +703,13 @@ export default function AdminActivity() {
                             <div className="text-[11px] font-semibold tracking-wide text-slate-500">CHECKLIST DETAILS</div>
                             <div className="mt-2 grid gap-2">
                               {insp.checklist.map((item, j) => {
-                                const v = item.operation_is_functional;
                                 const itemType = item.checklist_type || 'boolean';
                                 const expectedQty = item.checklist_quantity;
 
                                 let label, cls;
 
                                 if (itemType === 'quantity') {
-                                  const numVal = v !== null && v !== undefined ? Number(v) : null;
+                                  const numVal = item.operation_quantity !== null && item.operation_quantity !== undefined ? Number(item.operation_quantity) : null;
                                   if (numVal !== null && !isNaN(numVal)) {
                                     const match = numVal === Number(expectedQty);
                                     label = `${numVal} / ${expectedQty}`;
@@ -720,10 +719,11 @@ export default function AdminActivity() {
                                     cls = 'text-slate-500';
                                   }
                                 } else if (itemType === 'condition') {
-                                  if (v !== null && v !== undefined && String(v).trim() !== '') {
+                                  const conditionVal = item.operation_condition;
+                                  if (conditionVal !== null && conditionVal !== undefined && String(conditionVal).trim() !== '') {
                                     const goodOptions = ['good', 'clean', 'working', 'functional', 'ok'];
-                                    const isGood = goodOptions.some(g => String(v).toLowerCase().includes(g));
-                                    label = String(v).charAt(0).toUpperCase() + String(v).slice(1);
+                                    const isGood = goodOptions.some(g => String(conditionVal).toLowerCase().includes(g));
+                                    label = String(conditionVal).charAt(0).toUpperCase() + String(conditionVal).slice(1);
                                     cls = isGood ? 'text-emerald-600' : 'text-amber-600';
                                   } else {
                                     label = 'Pending';
@@ -731,6 +731,7 @@ export default function AdminActivity() {
                                   }
                                 } else {
                                   // Boolean
+                                  const v = item.operation_is_functional;
                                   const n = v === null || v === undefined ? null : Number(v);
                                   label = n === 1 ? 'OK' : n === 0 ? 'Not OK' : 'Pending';
                                   cls = n === 1 ? 'text-emerald-600' : n === 0 ? 'text-rose-600' : 'text-slate-500';

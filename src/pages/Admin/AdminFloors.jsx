@@ -18,9 +18,8 @@ export default function AdminFloors() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ building_id: '', floor_id: '' });
 
-  const [openMenuId, setOpenMenuId] = useState(null);
-  const menuRootRefById = useRef({});
-
+  const [page, setPage] = useState(0);
+  const ITEMS_PER_PAGE = 10;
   const baseUrl = useMemo(() => {
     const storedUrl = SecureStorage.getLocalItem('janitorial_url');
     return withSlash(storedUrl || getApiBaseUrl());
@@ -47,6 +46,12 @@ export default function AdminFloors() {
       return matchesQuery && matchesBuilding;
     });
   }, [floors, search, buildingFilter, floorNameById]);
+
+  const paginated = useMemo(() => {
+    return filteredFloors.slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE);
+  }, [filteredFloors, page]);
+
+  const totalPages = Math.ceil(filteredFloors.length / ITEMS_PER_PAGE) || 1;
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -88,17 +93,8 @@ export default function AdminFloors() {
   }, [loadAll]);
 
   useEffect(() => {
-    if (!openMenuId) return;
-
-    const handleDocumentMouseDown = (e) => {
-      const root = menuRootRefById.current[String(openMenuId)];
-      if (root && root.contains(e.target)) return;
-      setOpenMenuId(null);
-    };
-
-    document.addEventListener('mousedown', handleDocumentMouseDown);
-    return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
-  }, [openMenuId]);
+    setPage(0);
+  }, [search, buildingFilter]);
 
   const openCreate = () => {
     setEditing(null);
@@ -251,7 +247,7 @@ export default function AdminFloors() {
           </div>
 
         <div>
-          {filteredFloors.map((f) => {
+          {paginated.map((f) => {
             const bName = f.building_name || buildingNameById.get(String(f.building_id)) || '';
             const floorName = f.floor_name || floorNameById.get(String(f.floor_id)) || '';
             return (
@@ -266,55 +262,56 @@ export default function AdminFloors() {
                   <span>{bName}</span>
                 </div>
 
-                <div
-                  className="relative flex justify-end"
-                  ref={(el) => {
-                    if (el) menuRootRefById.current[String(f.floorbuilding_id)] = el;
-                  }}
-                >
+                <div className="flex items-center justify-end gap-1">
                   <button
                     type="button"
-                    className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100"
-                    onClick={() => setOpenMenuId((p) => (p === f.floorbuilding_id ? null : f.floorbuilding_id))}
+                    className="rounded-lg px-2 py-1 text-sm text-slate-600 hover:bg-slate-100"
+                    onClick={() => openEdit(f)}
                   >
-                    ...
+                    Edit
                   </button>
-
-                  {openMenuId === f.floorbuilding_id ? (
-                    <div
-                      className="absolute right-0 top-8 z-50 w-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg"
-                    >
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                        onClick={() => {
-                          setOpenMenuId(null);
-                          openEdit(f);
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-sm text-rose-700 hover:bg-rose-50"
-                        onClick={() => {
-                          setOpenMenuId(null);
-                          remove(f);
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="rounded-lg px-2 py-1 text-sm text-rose-600 hover:bg-rose-50"
+                    onClick={() => remove(f)}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             );
           })}
 
-          {!loading && filteredFloors.length === 0 ? (
+          {!loading && paginated.length === 0 ? (
             <div className="px-5 py-6 text-sm text-slate-500">No floors found.</div>
           ) : null}
         </div>
+
+        {totalPages > 1 ? (
+          <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3">
+            <div className="text-sm text-slate-500">
+              Page {page + 1} of {totalPages}
+            </div>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="rounded-lg px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="rounded-lg px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {openModal ? (

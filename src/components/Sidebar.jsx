@@ -149,7 +149,7 @@ export default function Sidebar({ title, homePath, isMobile, isOpen, onOpen, onC
               {/* Main Navigation */}
               <div className="cc-nav-group-title">Main</div>
               <NavItem to={homePath} icon={Icon.Dashboard} end>
-                Dashboard
+                Overview
               </NavItem>
               <NavItem to="/admin/users" icon={Icon.Users}>
                 Users
@@ -179,17 +179,18 @@ export default function Sidebar({ title, homePath, isMobile, isOpen, onOpen, onC
 
                 {isFacilitiesOpen && (
                   <div className="cc-nav-sub">
+                    <NavItem to="/admin/floor-names" icon={Icon.FloorNames}>
+                      Floor Names
+                    </NavItem>
                     <NavItem to="/admin/buildings" icon={Icon.Building}>
                       Buildings
                     </NavItem>
-                    <NavItem to="/admin/rooms" icon={Icon.Door}>
-                      Rooms
-                    </NavItem>
-                    <NavItem to="/admin/floors" icon={Icon.Floor}>
+
+                     <NavItem to="/admin/floors" icon={Icon.Floor}>
                       Floors
                     </NavItem>
-                    <NavItem to="/admin/floor-names" icon={Icon.FloorNames}>
-                      Floor Names
+                    <NavItem to="/admin/rooms" icon={Icon.Door}>
+                      Rooms
                     </NavItem>
                     <NavItem to="/admin/checklists" icon={Icon.Checklist}>
                       Checklists

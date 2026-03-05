@@ -295,6 +295,8 @@ class AdminReports {
                             ao.operation_updated_by AS user_id,
                             DATE(ao.operation_updated_at) AS op_date,
                             ao.operation_is_functional,
+                            ao.operation_quantity,
+                            ao.operation_condition,
                             ao.operation_updated_at
                         FROM tblassignedoperation ao
                         INNER JOIN (
@@ -322,6 +324,8 @@ class AdminReports {
                         $key = (int)$op['room_id'] . '|' . (int)$op['user_id'] . '|' . (string)$op['op_date'] . '|' . (int)$op['checklist_id'];
                         $opsMap[$key] = [
                             'operation_is_functional' => $op['operation_is_functional'] === null ? null : (int)$op['operation_is_functional'],
+                            'operation_quantity' => $op['operation_quantity'] === null ? null : (int)$op['operation_quantity'],
+                            'operation_condition' => $op['operation_condition'] ?? null,
                             'operation_updated_at' => $op['operation_updated_at']
                         ];
                     }
@@ -340,7 +344,11 @@ class AdminReports {
                             $withOps[] = [
                                 'checklist_id' => $cid,
                                 'checklist_name' => $ci['checklist_name'],
+                                'checklist_type' => $ci['checklist_type'] ?? 'boolean',
+                                'checklist_quantity' => $ci['checklist_quantity'] ?? null,
                                 'operation_is_functional' => $opInfo ? $opInfo['operation_is_functional'] : null,
+                                'operation_quantity' => $opInfo ? $opInfo['operation_quantity'] : null,
+                                'operation_condition' => $opInfo ? $opInfo['operation_condition'] : null,
                                 'operation_updated_at' => $opInfo ? $opInfo['operation_updated_at'] : null,
                             ];
                         }

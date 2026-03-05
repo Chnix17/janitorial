@@ -1931,11 +1931,13 @@
                      c.checklist_type,
                      c.checklist_quantity,
                      o.operation_is_functional,
+                     o.operation_quantity,
+                     o.operation_condition,
                      o.operation_updated_at
                  FROM tblroom r
                  JOIN tblroomchecklist c ON c.checklist_floorbuilding_id = r.room_building_floor_id
                  LEFT JOIN (
-                     SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_updated_at
+                     SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at
                      FROM tblassignedoperation ao1
                      INNER JOIN (
                          SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at
@@ -1968,7 +1970,11 @@
                  $byRoom[$rid][] = [
                      'checklist_id' => (int)$cr['checklist_id'],
                      'checklist_name' => $cr['checklist_name'],
+                     'checklist_type' => $cr['checklist_type'] ?? 'boolean',
+                     'checklist_quantity' => $cr['checklist_quantity'] ?? null,
                      'operation_is_functional' => $cr['operation_is_functional'] === null ? null : (int)$cr['operation_is_functional'],
+                     'operation_quantity' => $cr['operation_quantity'] === null ? null : (int)$cr['operation_quantity'],
+                     'operation_condition' => $cr['operation_condition'] ?? null,
                      'operation_updated_at' => $cr['operation_updated_at']
                  ];
              }

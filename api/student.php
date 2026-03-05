@@ -211,11 +211,13 @@
                     c.checklist_type,
                     c.checklist_quantity,
                     o.operation_is_functional,
+                    o.operation_quantity,
+                    o.operation_condition,
                     o.operation_updated_at
                 FROM tblroom r
                 JOIN tblroomchecklist c ON c.checklist_floorbuilding_id = r.room_building_floor_id
                 LEFT JOIN (
-                    SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_updated_at
+                    SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at
                     FROM tblassignedoperation ao1
                     INNER JOIN (
                         SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at
@@ -248,7 +250,11 @@
                 $byRoom[$rid][] = [
                     'checklist_id' => (int)$cr['checklist_id'],
                     'checklist_name' => $cr['checklist_name'],
+                    'checklist_type' => $cr['checklist_type'] ?? 'boolean',
+                    'checklist_quantity' => $cr['checklist_quantity'] ?? null,
                     'operation_is_functional' => $cr['operation_is_functional'] === null ? null : (int)$cr['operation_is_functional'],
+                    'operation_quantity' => $cr['operation_quantity'] === null ? null : (int)$cr['operation_quantity'],
+                    'operation_condition' => $cr['operation_condition'] ?? null,
                     'operation_updated_at' => $cr['operation_updated_at']
                 ];
             }
@@ -362,11 +368,13 @@
                     c.checklist_type,
                     c.checklist_quantity,
                     o.operation_is_functional,
+                    o.operation_quantity,
+                    o.operation_condition,
                     o.operation_updated_at
                 FROM tblroom r
                 JOIN tblroomchecklist c ON c.checklist_floorbuilding_id = r.room_building_floor_id
                 LEFT JOIN (
-                    SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_updated_at
+                    SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at
                     FROM tblassignedoperation ao1
                     INNER JOIN (
                         SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at
@@ -399,7 +407,11 @@
                 $byRoom[$rid][] = [
                     'checklist_id' => (int)$cr['checklist_id'],
                     'checklist_name' => $cr['checklist_name'],
+                    'checklist_type' => $cr['checklist_type'] ?? 'boolean',
+                    'checklist_quantity' => $cr['checklist_quantity'] ?? null,
                     'operation_is_functional' => $cr['operation_is_functional'] === null ? null : (int)$cr['operation_is_functional'],
+                    'operation_quantity' => $cr['operation_quantity'] === null ? null : (int)$cr['operation_quantity'],
+                    'operation_condition' => $cr['operation_condition'] ?? null,
                     'operation_updated_at' => $cr['operation_updated_at']
                 ];
             }
@@ -591,10 +603,10 @@
             }
 
             if ($reported_by) {
-                $stmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_name, c.checklist_floorbuilding_id, c.checklist_type, c.checklist_quantity, c.checklist_options, o.operation_id, o.operation_is_functional, o.operation_updated_at, o.operation_updated_by FROM tblroomchecklist c LEFT JOIN (SELECT ao1.operation_id, ao1.operation_is_functional, ao1.operation_updated_at, ao1.operation_updated_by, ao1.operation_room_id, ao1.operation_checklist_id FROM tblassignedoperation ao1 INNER JOIN (SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at FROM tblassignedoperation WHERE operation_updated_by = ? AND DATE(operation_updated_at) = CURDATE() GROUP BY operation_room_id, operation_checklist_id) ao2 ON ao2.operation_room_id = ao1.operation_room_id AND ao2.operation_checklist_id = ao1.operation_checklist_id AND ao2.max_updated_at = ao1.operation_updated_at WHERE ao1.operation_updated_by = ?) o ON o.operation_room_id = ? AND o.operation_checklist_id = c.checklist_id WHERE c.checklist_floorbuilding_id = ? ORDER BY c.checklist_name ASC');
+                $stmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_name, c.checklist_floorbuilding_id, c.checklist_type, c.checklist_quantity, c.checklist_options, o.operation_id, o.operation_is_functional, o.operation_quantity, o.operation_condition, o.operation_updated_at, o.operation_updated_by FROM tblroomchecklist c LEFT JOIN (SELECT ao1.operation_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at, ao1.operation_updated_by, ao1.operation_room_id, ao1.operation_checklist_id FROM tblassignedoperation ao1 INNER JOIN (SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at FROM tblassignedoperation WHERE operation_updated_by = ? AND DATE(operation_updated_at) = CURDATE() GROUP BY operation_room_id, operation_checklist_id) ao2 ON ao2.operation_room_id = ao1.operation_room_id AND ao2.operation_checklist_id = ao1.operation_checklist_id AND ao2.max_updated_at = ao1.operation_updated_at WHERE ao1.operation_updated_by = ?) o ON o.operation_room_id = ? AND o.operation_checklist_id = c.checklist_id WHERE c.checklist_floorbuilding_id = ? ORDER BY c.checklist_name ASC');
                 $stmt->execute([$reported_by, $reported_by, $room_id, $floorbuilding_id]);
             } else {
-                $stmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_name, c.checklist_floorbuilding_id, c.checklist_type, c.checklist_quantity, c.checklist_options, o.operation_id, o.operation_is_functional, o.operation_updated_at, o.operation_updated_by FROM tblroomchecklist c LEFT JOIN (SELECT ao1.operation_id, ao1.operation_is_functional, ao1.operation_updated_at, ao1.operation_updated_by, ao1.operation_room_id, ao1.operation_checklist_id FROM tblassignedoperation ao1 INNER JOIN (SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at FROM tblassignedoperation WHERE DATE(operation_updated_at) = CURDATE() GROUP BY operation_room_id, operation_checklist_id) ao2 ON ao2.operation_room_id = ao1.operation_room_id AND ao2.operation_checklist_id = ao1.operation_checklist_id AND ao2.max_updated_at = ao1.operation_updated_at) o ON o.operation_room_id = ? AND o.operation_checklist_id = c.checklist_id WHERE c.checklist_floorbuilding_id = ? ORDER BY c.checklist_name ASC');
+                $stmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_name, c.checklist_floorbuilding_id, c.checklist_type, c.checklist_quantity, c.checklist_options, o.operation_id, o.operation_is_functional, o.operation_quantity, o.operation_condition, o.operation_updated_at, o.operation_updated_by FROM tblroomchecklist c LEFT JOIN (SELECT ao1.operation_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at, ao1.operation_updated_by, ao1.operation_room_id, ao1.operation_checklist_id FROM tblassignedoperation ao1 INNER JOIN (SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at FROM tblassignedoperation WHERE DATE(operation_updated_at) = CURDATE() GROUP BY operation_room_id, operation_checklist_id) ao2 ON ao2.operation_room_id = ao1.operation_room_id AND ao2.operation_checklist_id = ao1.operation_checklist_id AND ao2.max_updated_at = ao1.operation_updated_at) o ON o.operation_room_id = ? AND o.operation_checklist_id = c.checklist_id WHERE c.checklist_floorbuilding_id = ? ORDER BY c.checklist_name ASC');
                 $stmt->execute([$room_id, $floorbuilding_id]);
             }
 
@@ -625,7 +637,7 @@
             $room_id = (int)$data['operation_room_id'];
             $checklist_id = (int)$data['operation_checklist_id'];
             $updated_by = (int)$data['operation_updated_by'];
-            $is_functional = $this->normalizeChecklistStatus($data['operation_is_functional'], 1);
+            $value = $data['operation_is_functional']; // Can be 0/1 for boolean, number for quantity, or string for condition
             $assigned_id = isset($data['operation_assigned_id']) ? (int)$data['operation_assigned_id'] : null;
 
             if ($room_id <= 0) {
@@ -673,13 +685,47 @@
                 ]);
             }
 
-            $checkChecklist = $this->conn->prepare('SELECT c.checklist_id FROM tblroomchecklist c JOIN tblroom r ON r.room_building_floor_id = c.checklist_floorbuilding_id WHERE c.checklist_id = ? AND r.room_id = ?');
-            $checkChecklist->execute([$checklist_id, $room_id]);
-            if (!$checkChecklist->fetch(PDO::FETCH_ASSOC)) {
+            // Get checklist type to determine how to store the value
+            $checklistStmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_type, c.checklist_quantity FROM tblroomchecklist c JOIN tblroom r ON r.room_building_floor_id = c.checklist_floorbuilding_id WHERE c.checklist_id = ? AND r.room_id = ?');
+            $checklistStmt->execute([$checklist_id, $room_id]);
+            $checklistInfo = $checklistStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$checklistInfo) {
                 return json_encode([
                     'success' => false,
                     'message' => 'Checklist item not found for this room.'
                 ]);
+            }
+            
+            $itemType = $checklistInfo['checklist_type'] ?? 'boolean';
+            $expectedQty = $checklistInfo['checklist_quantity'] ?? null;
+
+            // Determine values based on checklist type
+            $isFunctional = null;
+            $quantity = null;
+            $condition = null;
+            
+            if ($itemType === 'quantity') {
+                // Store quantity value
+                $quantity = is_numeric($value) ? (int)$value : null;
+                // Set is_functional based on whether quantity matches expected
+                if ($quantity !== null && $expectedQty !== null) {
+                    $isFunctional = $quantity >= $expectedQty ? 1 : 0;
+                }
+            } elseif ($itemType === 'condition') {
+                // Store condition value
+                $condition = trim((string)$value);
+                // Set is_functional based on good condition keywords
+                $goodOptions = ['good', 'clean', 'working', 'functional', 'ok'];
+                $isFunctional = 0;
+                foreach ($goodOptions as $good) {
+                    if (stripos($condition, $good) !== false) {
+                        $isFunctional = 1;
+                        break;
+                    }
+                }
+            } else {
+                // Boolean type - store in is_functional
+                $isFunctional = $this->normalizeChecklistStatus($value, 1);
             }
 
             $find = $this->conn->prepare('SELECT operation_id, operation_updated_at FROM tblassignedoperation WHERE operation_room_id = ? AND operation_checklist_id = ? ORDER BY operation_updated_at DESC LIMIT 1');
@@ -688,8 +734,8 @@
 
             if ($existing && isset($existing['operation_updated_at']) && date('Y-m-d', strtotime($existing['operation_updated_at'])) === date('Y-m-d')) {
                 $operation_id = (int)$existing['operation_id'];
-                $upd = $this->conn->prepare('UPDATE tblassignedoperation SET operation_is_functional = ?, operation_updated_at = NOW(), operation_updated_by = ?, operation_assigned_id = ? WHERE operation_id = ?');
-                $upd->execute([$is_functional, $updated_by, $assigned_id, $operation_id]);
+                $upd = $this->conn->prepare('UPDATE tblassignedoperation SET operation_is_functional = ?, operation_quantity = ?, operation_condition = ?, operation_updated_at = NOW(), operation_updated_by = ?, operation_assigned_id = ? WHERE operation_id = ?');
+                $upd->execute([$isFunctional, $quantity, $condition, $updated_by, $assigned_id, $operation_id]);
                 return json_encode([
                     'success' => true,
                     'message' => 'Checklist operation updated successfully',
@@ -697,8 +743,8 @@
                 ]);
             }
 
-            $ins = $this->conn->prepare('INSERT INTO tblassignedoperation (operation_is_functional, operation_updated_at, operation_updated_by, operation_room_id, operation_checklist_id, operation_assigned_id) VALUES (?, NOW(), ?, ?, ?, ?)');
-            $ins->execute([$is_functional, $updated_by, $room_id, $checklist_id, $assigned_id]);
+            $ins = $this->conn->prepare('INSERT INTO tblassignedoperation (operation_is_functional, operation_quantity, operation_condition, operation_updated_at, operation_updated_by, operation_room_id, operation_checklist_id, operation_assigned_id) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?)');
+            $ins->execute([$isFunctional, $quantity, $condition, $updated_by, $room_id, $checklist_id, $assigned_id]);
 
             return json_encode([
                 'success' => true,
@@ -813,15 +859,70 @@
             $insStatus = $this->conn->prepare('INSERT INTO tblassignedstatus (assigned_id, room_id, assigned_remarks, assigned_status, assigned_reported_by, completion_date, assigned_updated_at) VALUES (?, ?, ?, ?, ?, CURDATE(), NOW())');
             $insStatus->execute([$assigned_id, $room_id, $assigned_remarks, $assigned_status, $reported_by]);
 
-            $insOperation = $this->conn->prepare('INSERT INTO tblassignedoperation (operation_is_functional, operation_updated_at, operation_updated_by, operation_room_id, operation_checklist_id) VALUES (?, NOW(), ?, ?, ?)');
+            // Get checklist types for the operations being submitted
+            $checklistIds = array_filter(array_map(function($op) {
+                return isset($op['checklist_id']) ? (int)$op['checklist_id'] : 0;
+            }, $operations));
+            
+            $checklistTypes = [];
+            if (count($checklistIds) > 0) {
+                $placeholders = implode(',', array_fill(0, count($checklistIds), '?'));
+                $typeStmt = $this->conn->prepare("SELECT checklist_id, checklist_type, checklist_quantity FROM tblroomchecklist WHERE checklist_id IN ($placeholders)");
+                $typeStmt->execute($checklistIds);
+                $typeRows = $typeStmt->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($typeRows as $row) {
+                    $checklistTypes[(int)$row['checklist_id']] = [
+                        'type' => $row['checklist_type'] ?? 'boolean',
+                        'quantity' => $row['checklist_quantity'] ?? null
+                    ];
+                }
+            }
+
+            // Insert operation with appropriate column based on checklist type
+            $insOperation = $this->conn->prepare('INSERT INTO tblassignedoperation (operation_is_functional, operation_quantity, operation_condition, operation_updated_at, operation_updated_by, operation_room_id, operation_checklist_id) VALUES (?, ?, ?, NOW(), ?, ?, ?)');
 
             foreach ($operations as $op) {
                 $checklist_id = (int)($op['checklist_id'] ?? 0);
-                $status = $this->normalizeChecklistStatus($op['status'] ?? null, null);
-                if ($checklist_id <= 0 || $status === null) {
+                $status = $op['status'] ?? null;
+                if ($checklist_id <= 0 || $status === null || $status === '') {
                     continue;
                 }
-                $insOperation->execute([$status, $reported_by, $room_id, $checklist_id]);
+                
+                $itemType = $checklistTypes[$checklist_id]['type'] ?? 'boolean';
+                $expectedQty = $checklistTypes[$checklist_id]['quantity'] ?? null;
+                
+                $isFunctional = null;
+                $quantity = null;
+                $condition = null;
+                
+                if ($itemType === 'quantity') {
+                    // Store quantity value
+                    $quantity = is_numeric($status) ? (int)$status : null;
+                    // Set is_functional based on whether quantity matches expected
+                    if ($quantity !== null && $expectedQty !== null) {
+                        $isFunctional = $quantity >= $expectedQty ? 1 : 0;
+                    }
+                } elseif ($itemType === 'condition') {
+                    // Store condition value
+                    $condition = trim((string)$status);
+                    // Set is_functional based on good condition keywords
+                    $goodOptions = ['good', 'clean', 'working', 'functional', 'ok'];
+                    $isFunctional = 0;
+                    foreach ($goodOptions as $good) {
+                        if (stripos($condition, $good) !== false) {
+                            $isFunctional = 1;
+                            break;
+                        }
+                    }
+                } else {
+                    // Boolean type - store in is_functional
+                    $isFunctional = $this->normalizeChecklistStatus($status, null);
+                    if ($isFunctional === null) {
+                        continue;
+                    }
+                }
+                
+                $insOperation->execute([$isFunctional, $quantity, $condition, $reported_by, $room_id, $checklist_id]);
             }
 
             $this->conn->commit();

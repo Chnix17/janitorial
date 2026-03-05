@@ -32,13 +32,6 @@ const getManilaDate = () => {
   return `${year}-${month}-${day}`;
 };
 
-// Helper: Check if today is Sunday in Asia/Manila timezone
-const isSundayInManila = () => {
-  const now = new Date();
-  const manilaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
-  return manilaTime.getDay() === 0;
-};
-
 
 
 export default function StudentAssignments() {
@@ -112,8 +105,6 @@ export default function StudentAssignments() {
   }, [user]);
 
   const todayYmd = useMemo(() => getManilaDate(), []);
-
-  const isTodaySunday = useMemo(() => isSundayInManila(), []);
 
   const isMobile = useMediaQuery({ maxWidth: 640 });
 
@@ -380,21 +371,38 @@ export default function StudentAssignments() {
         const seeded = {};
 
         items.forEach((item) => {
+          const itemType = item.checklist_type || 'boolean';
+          let val = null;
 
-          if (item.operation_is_functional === null || typeof item.operation_is_functional === 'undefined') {
-
-            return;
-
+          if (itemType === 'quantity') {
+            // For quantity type, use operation_quantity if available, otherwise fall back to operation_is_functional
+            if (item.operation_quantity !== null && item.operation_quantity !== undefined) {
+              val = item.operation_quantity;
+            } else if (item.operation_is_functional !== null && item.operation_is_functional !== undefined) {
+              // Fallback: if only is_functional is set, use that as the quantity value
+              val = Number(item.operation_is_functional);
+            }
+          } else if (itemType === 'condition') {
+            // For condition type, use operation_condition if available
+            if (item.operation_condition !== null && item.operation_condition !== undefined && String(item.operation_condition).trim() !== '') {
+              val = String(item.operation_condition).trim();
+            } else if (item.operation_is_functional !== null && item.operation_is_functional !== undefined) {
+              // Fallback: derive from is_functional
+              val = Number(item.operation_is_functional) === 1 ? 'Good' : 'Needs Attention';
+            }
+          } else {
+            // Boolean type - use operation_is_functional
+            if (item.operation_is_functional !== null && item.operation_is_functional !== undefined) {
+              const numVal = Number(item.operation_is_functional);
+              if (numVal === 0 || numVal === 1) {
+                val = numVal;
+              }
+            }
           }
 
-          const val = Number(item.operation_is_functional);
-
-          if (val === 0 || val === 1) {
-
+          if (val !== null && val !== undefined && val !== '') {
             seeded[item.checklist_id] = val;
-
           }
-
         });
 
         setSelectedByChecklistId(seeded);
@@ -558,17 +566,17 @@ export default function StudentAssignments() {
 
 
 
-  const getStatusLabel = (value) => {
+  // const getStatusLabel = (value) => {
 
-    if (value === null || typeof value === 'undefined') return 'Not recorded';
+  //   if (value === null || typeof value === 'undefined') return 'Not recorded';
 
-    if (Number(value) === 1) return 'OK';
+  //   if (Number(value) === 1) return 'OK';
 
-    if (Number(value) === 0) return 'Not OK';
+  //   if (Number(value) === 0) return 'Not OK';
 
-    return 'Not recorded';
+  //   return 'Not recorded';
 
-  };
+  // };
 
 
 
@@ -603,15 +611,22 @@ export default function StudentAssignments() {
               value={selectedAssignmentId}
               onChange={(e) => setSelectedAssignmentId(e.target.value)}
             >
-              {assignments.map((a) => (
-                <option
-                  key={a.assigned_id}
-                  value={a.assigned_id}
-                  disabled={todayYmd < a.assigned_start_date}
-                >
-                  {a.building_name} • {a.floor_name} ({a.assigned_start_date} to {a.assigned_end_date}){todayYmd < a.assigned_start_date ? ' - Not started yet' : ''}
-                </option>
-              ))}
+              {assignments.map((a) => {
+                const isNotStarted = todayYmd < a.assigned_start_date;
+                const isExpired = todayYmd > a.assigned_end_date;
+                const isInactive = isNotStarted || isExpired;
+                return (
+                  <option
+                    key={a.assigned_id}
+                    value={a.assigned_id}
+                    disabled={isInactive}
+                  >
+                    {a.building_name} • {a.floor_name} ({a.assigned_start_date} to {a.assigned_end_date})
+                    {isNotStarted ? ' - Not started yet' : ''}
+                    {isExpired ? ' - Expired' : ''}
+                  </option>
+                );
+              })}
             </select>
           </div>
         </div>
@@ -625,7 +640,7 @@ export default function StudentAssignments() {
 
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">📅</span>
 
-          {todayLabel}
+          As of today {todayLabel}
 
         </div>
 
@@ -634,12 +649,6 @@ export default function StudentAssignments() {
         {loading ? (
 
           <div className="mt-3 text-sm text-slate-500">Loading...</div>
-
-        ) : isTodaySunday ? (
-
-          <div className="mt-3 rounded-xl bg-slate-100 p-4 text-sm text-slate-600">
-            <span className="font-semibold">Sunday - No inspections scheduled.</span> Please check back tomorrow.
-          </div>
 
         ) : rooms.length === 0 ? (
 
@@ -658,8 +667,6 @@ export default function StudentAssignments() {
                 type="button"
 
                 onClick={() => loadChecklist(room)}
-
-                disabled={isTodaySunday}
 
                 className="flex w-full items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50/40 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:bg-white"
 
@@ -821,22 +828,49 @@ export default function StudentAssignments() {
 
                           case 'condition':
                             const options = item.checklist_options ? item.checklist_options.split(',').map(o => o.trim()) : [];
+                            const allOptions = [...options, 'Others'];
+                            const isCustomValue = v && !options.includes(v) && v !== 'Others';
+                            const isOthersSelected = v === 'Others' || isCustomValue;
+                            const othersValue = isCustomValue ? v : '';
                             return (
-                              <select
-                                value={v || ''}
-                                onChange={(e) => selectChecklistStatus(cid, e.target.value)}
-                                disabled={isViewOnly}
-                                className={`w-full rounded-lg border px-3 py-2.5 text-sm font-semibold outline-none transition ${
-                                  v
-                                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                                    : 'border-slate-200 bg-white text-slate-600'
-                                } ${isViewOnly ? 'cursor-not-allowed opacity-60' : 'hover:border-emerald-300'}`}
-                              >
-                                <option value="">Select condition...</option>
-                                {options.map((opt) => (
-                                  <option key={opt} value={opt}>{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
-                                ))}
-                              </select>
+                              <div className="space-y-2">
+                                <select
+                                  value={isOthersSelected ? 'Others' : (v || '')}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === 'Others') {
+                                      selectChecklistStatus(cid, 'Others');
+                                    } else {
+                                      selectChecklistStatus(cid, val);
+                                    }
+                                  }}
+                                  disabled={isViewOnly}
+                                  className={`w-full rounded-lg border px-3 py-2.5 text-sm font-semibold outline-none transition ${
+                                    v && v !== 'Others'
+                                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                                      : 'border-slate-200 bg-white text-slate-600'
+                                  } ${isViewOnly ? 'cursor-not-allowed opacity-60' : 'hover:border-emerald-300'}`}
+                                >
+                                  <option value="">Select condition...</option>
+                                  {allOptions.map((opt) => (
+                                    <option key={opt} value={opt}>{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
+                                  ))}
+                                </select>
+                                {isOthersSelected && (
+                                  <input
+                                    type="text"
+                                    value={othersValue}
+                                    onChange={(e) => selectChecklistStatus(cid, e.target.value)}
+                                    disabled={isViewOnly}
+                                    placeholder="Enter other condition..."
+                                    className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold outline-none transition ${
+                                      othersValue
+                                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                                        : 'border-amber-300 bg-amber-50 text-amber-700'
+                                    } ${isViewOnly ? 'cursor-not-allowed opacity-60' : 'focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100'}`}
+                                  />
+                                )}
+                              </div>
                             );
 
                           case 'boolean':

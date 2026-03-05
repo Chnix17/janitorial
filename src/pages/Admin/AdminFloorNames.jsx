@@ -29,13 +29,8 @@ export default function AdminFloorNames() {
 
   const [floorName, setFloorName] = useState('');
 
-
-
-  const [openMenuId, setOpenMenuId] = useState(null);
-
-  const menuRootRefById = useRef({});
-
-
+  const [page, setPage] = useState(0);
+  const ITEMS_PER_PAGE = 10;
 
   const baseUrl = useMemo(() => {
 
@@ -56,6 +51,16 @@ export default function AdminFloorNames() {
     return floorNames.filter((f) => String(f.floor_name || '').toLowerCase().includes(q));
 
   }, [floorNames, search]);
+
+
+
+  const paginated = useMemo(() => {
+    return filtered.slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE);
+  }, [filtered, page]);
+
+
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
 
 
 
@@ -105,27 +110,9 @@ export default function AdminFloorNames() {
 
   useEffect(() => {
 
-    if (!openMenuId) return;
+    setPage(0);
 
-
-
-    const handleDocumentMouseDown = (e) => {
-
-      const root = menuRootRefById.current[String(openMenuId)];
-
-      if (root && root.contains(e.target)) return;
-
-      setOpenMenuId(null);
-
-    };
-
-
-
-    document.addEventListener('mousedown', handleDocumentMouseDown);
-
-    return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
-
-  }, [openMenuId]);
+  }, [search]);
 
 
 
@@ -334,7 +321,7 @@ export default function AdminFloorNames() {
 
         <div>
 
-          {filtered.map((f) => (
+          {paginated.map((f) => (
 
             <div key={f.floor_id} className="grid grid-cols-[1fr_56px] items-center gap-2 border-b border-slate-100 px-5 py-4">
 
@@ -342,82 +329,21 @@ export default function AdminFloorNames() {
 
 
 
-              <div
-
-                className="relative flex justify-end"
-
-                ref={(el) => {
-
-                  if (el) menuRootRefById.current[String(f.floor_id)] = el;
-
-                }}
-
-              >
-
+              <div className="flex items-center justify-end gap-1">
                 <button
-
                   type="button"
-
-                  className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100"
-
-                  onClick={() => setOpenMenuId((p) => (p === f.floor_id ? null : f.floor_id))}
-
+                  className="rounded-lg px-2 py-1 text-sm text-slate-600 hover:bg-slate-100"
+                  onClick={() => openEdit(f)}
                 >
-
-                  ...
-
+                  Edit
                 </button>
-
-
-
-                {openMenuId === f.floor_id ? (
-
-                  <div className="absolute right-0 top-8 z-50 w-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-
-                    <button
-
-                      type="button"
-
-                      className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-
-                      onClick={() => {
-
-                        setOpenMenuId(null);
-
-                        openEdit(f);
-
-                      }}
-
-                    >
-
-                      Edit
-
-                    </button>
-
-                    <button
-
-                      type="button"
-
-                      className="block w-full px-3 py-2 text-left text-sm text-rose-700 hover:bg-rose-50"
-
-                      onClick={() => {
-
-                        setOpenMenuId(null);
-
-                        remove(f);
-
-                      }}
-
-                    >
-
-                      Delete
-
-                    </button>
-
-                  </div>
-
-                ) : null}
-
+                <button
+                  type="button"
+                  className="rounded-lg px-2 py-1 text-sm text-rose-600 hover:bg-rose-50"
+                  onClick={() => remove(f)}
+                >
+                  Delete
+                </button>
               </div>
 
             </div>
@@ -426,7 +352,7 @@ export default function AdminFloorNames() {
 
 
 
-          {!loading && filtered.length === 0 ? (
+          {!loading && paginated.length === 0 ? (
 
             <div className="px-5 py-6 text-sm text-slate-500">No floor names found.</div>
 
@@ -434,12 +360,36 @@ export default function AdminFloorNames() {
 
         </div>
 
+        {totalPages > 1 ? (
+          <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3">
+            <div className="text-sm text-slate-500">
+              Page {page + 1} of {totalPages}
+            </div>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="rounded-lg px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="rounded-lg px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
 
 
       {openModal ? (
-
         <div
 
           className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4"
