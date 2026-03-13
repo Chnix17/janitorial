@@ -245,7 +245,7 @@ class AdminReports {
                             c.checklist_type,
                             c.checklist_quantity
                         FROM tblroom r
-                        JOIN tblroomchecklist c ON c.checklist_floorbuilding_id = r.room_building_floor_id
+                        JOIN tblroomchecklist c ON c.checklist_room_id = r.room_id
                         WHERE r.room_id IN (' . $roomPlaceholders . ')
                         ORDER BY r.room_id ASC, c.checklist_name ASC
                     ');

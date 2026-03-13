@@ -13,6 +13,7 @@ export default function AdminRoomChecklists() {
 
   const [building_id, setBuildingId] = useState('');
   const [floorbuilding_id, setFloorBuildingId] = useState('');
+  const [room_id, setRoomId] = useState('');
 
   const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -99,8 +100,8 @@ export default function AdminRoomChecklists() {
     }
   }, [baseUrl]);
 
-  const loadChecklists = useCallback(async (fbId) => {
-    const id = fbId === '' ? '' : Number(fbId);
+  const loadChecklists = useCallback(async (rId) => {
+    const id = rId === '' ? '' : Number(rId);
     if (!id) {
       setChecklists([]);
       return;
@@ -108,7 +109,7 @@ export default function AdminRoomChecklists() {
 
     const res = await axios.post(
       `${baseUrl}admin.php`,
-      { operation: 'getRoomChecklists', json: { floorbuilding_id: id } },
+      { operation: 'getRoomChecklists', json: { room_id: id } },
       { headers: { 'Content-Type': 'application/json' } }
     );
 
@@ -137,7 +138,9 @@ export default function AdminRoomChecklists() {
 
   useEffect(() => {
     setFloorBuildingId('');
+    setRoomId('');
     setFloors([]);
+    setRooms([]);
     setChecklists([]);
 
     if (!building_id) return;
@@ -152,18 +155,34 @@ export default function AdminRoomChecklists() {
   }, [building_id, loadFloorsByBuilding]);
 
   useEffect(() => {
+    setRoomId('');
+    setRooms([]);
     setChecklists([]);
 
     if (!floorbuilding_id) return;
 
     (async () => {
       try {
-        await loadChecklists(floorbuilding_id);
+        await loadRoomsByFloorBuilding(floorbuilding_id);
+      } catch {
+        setRooms([]);
+      }
+    })();
+  }, [floorbuilding_id, loadRoomsByFloorBuilding]);
+
+  useEffect(() => {
+    setChecklists([]);
+
+    if (!room_id) return;
+
+    (async () => {
+      try {
+        await loadChecklists(room_id);
       } catch {
         setChecklists([]);
       }
     })();
-  }, [floorbuilding_id, loadChecklists]);
+  }, [room_id, loadChecklists]);
 
   useEffect(() => {
     if (!openMenuId) return;
@@ -185,6 +204,10 @@ export default function AdminRoomChecklists() {
     }
     if (!floorbuilding_id) {
       toast.error('Please select a floor first.');
+      return;
+    }
+    if (!room_id) {
+      toast.error('Please select a room first.');
       return;
     }
 
@@ -244,9 +267,9 @@ export default function AdminRoomChecklists() {
   const submit = async (e) => {
     e.preventDefault();
 
-    const fbId = floorbuilding_id === '' ? '' : Number(floorbuilding_id);
-    if (!fbId) {
-      toast.error('Please select a floor.');
+    const rId = room_id === '' ? '' : Number(room_id);
+    if (!rId) {
+      toast.error('Please select a room.');
       return;
     }
 
@@ -265,7 +288,7 @@ export default function AdminRoomChecklists() {
         ));
 
         if (existsInClient) {
-          toast.error('Checklist already exists for this floor.');
+          toast.error('Checklist already exists for this room.');
           return;
         }
 
@@ -287,7 +310,7 @@ export default function AdminRoomChecklists() {
         if (res?.data?.success) {
           toast.success('Checklist updated.');
           closeModal();
-          await loadChecklists(fbId);
+          await loadChecklists(rId);
         } else {
           toast.error(res?.data?.message || 'Save failed.');
         }
@@ -317,7 +340,7 @@ export default function AdminRoomChecklists() {
         checklists.some((x) => String(x.checklist_name || '').trim().toLowerCase() === item.name.toLowerCase())
       );
       if (existsAnyInClient) {
-        toast.error('Some checklist items already exist for this floor.');
+        toast.error('Some checklist items already exist for this room.');
         return;
       }
 
@@ -334,7 +357,7 @@ export default function AdminRoomChecklists() {
         {
           operation: 'createChecklistBulk',
           json: {
-            checklist_floorbuilding_id: fbId,
+            checklist_room_id: rId,
             items: checklistData
           }
         },
@@ -347,7 +370,7 @@ export default function AdminRoomChecklists() {
           toast.info(`${res.data.skipped.length} item(s) skipped (already exist).`);
         }
         closeModal();
-        await loadChecklists(fbId);
+        await loadChecklists(rId);
       } else {
         toast.error(res?.data?.message || 'Save failed.');
       }
@@ -371,7 +394,7 @@ export default function AdminRoomChecklists() {
 
       if (res?.data?.success) {
         toast.success('Checklist deleted.');
-        await loadChecklists(Number(floorbuilding_id));
+        await loadChecklists(Number(room_id));
       } else {
         toast.error(res?.data?.message || 'Delete failed.');
       }
@@ -391,13 +414,15 @@ export default function AdminRoomChecklists() {
   };
 
   const selectedFloorName = floorbuilding_id ? (floorNameByFloorBuildingId.get(String(floorbuilding_id)) || '') : '';
+  const selectedRoom = room_id ? rooms.find((r) => String(r.room_id) === String(room_id)) : null;
+  const selectedRoomNumber = selectedRoom ? selectedRoom.room_number : '';
 
   return (
     <div className="p-4 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">Floor Checklists</h1>
-          <p className="mt-1 text-sm text-slate-500">Create, update, delete, and bulk add checklist items per floor.</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">Room Checklists</h1>
+          <p className="mt-1 text-sm text-slate-500">Create, update, delete, and bulk add checklist items per room.</p>
         </div>
 
         <button
@@ -412,7 +437,7 @@ export default function AdminRoomChecklists() {
       </div>
 
       <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <label className="grid gap-2 text-sm font-semibold text-slate-800">
             Building
             <select
@@ -442,26 +467,41 @@ export default function AdminRoomChecklists() {
               ))}
             </select>
           </label>
+
+          <label className="grid gap-2 text-sm font-semibold text-slate-800">
+            Room
+            <select
+              value={room_id}
+              onChange={(e) => setRoomId(e.target.value)}
+              disabled={loading || !floorbuilding_id}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:opacity-60"
+            >
+              <option value="">Select room...</option>
+              {rooms.map((r) => (
+                <option key={r.room_id} value={r.room_id}>{r.room_number}</option>
+              ))}
+            </select>
+          </label>
         </div>
 
-        {selectedFloorName ? (
-          <div className="mt-3 text-sm text-slate-500">Selected floor: {selectedFloorName}</div>
+        {selectedFloorName && selectedRoomNumber ? (
+          <div className="mt-3 text-sm text-slate-500">Selected: {selectedFloorName} - Room {selectedRoomNumber}</div>
         ) : null}
       </div>
 
       <div className="mt-5 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-3">
           <div className="text-sm font-semibold text-slate-700">Checklist Items</div>
-          <div className="text-xs font-semibold text-slate-500">{floorbuilding_id ? `${checklists.length} item(s)` : 'Select a floor to view.'}</div>
+          <div className="text-xs font-semibold text-slate-500">{room_id ? `${checklists.length} item(s)` : 'Select a room to view.'}</div>
         </div>
 
         <div>
-          {!floorbuilding_id ? (
-            <div className="px-5 py-6 text-sm text-slate-500">No floor selected.</div>
+          {!room_id ? (
+            <div className="px-5 py-6 text-sm text-slate-500">No room selected.</div>
           ) : loading ? (
             <div className="px-5 py-6 text-sm text-slate-500">Loading...</div>
           ) : checklists.length === 0 ? (
-            <div className="px-5 py-6 text-sm text-slate-500">No checklist items for this floor.</div>
+            <div className="px-5 py-6 text-sm text-slate-500">No checklist items for this room.</div>
           ) : (
             checklists.map((c) => (
               <div key={c.checklist_id} className="grid grid-cols-[1fr_auto_56px] items-center gap-2 border-b border-slate-100 px-5 py-4">

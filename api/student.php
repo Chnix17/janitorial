@@ -215,7 +215,7 @@
                     o.operation_condition,
                     o.operation_updated_at
                 FROM tblroom r
-                JOIN tblroomchecklist c ON c.checklist_floorbuilding_id = r.room_building_floor_id
+                JOIN tblroomchecklist c ON c.checklist_room_id = r.room_id
                 LEFT JOIN (
                     SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at
                     FROM tblassignedoperation ao1
@@ -372,7 +372,7 @@
                     o.operation_condition,
                     o.operation_updated_at
                 FROM tblroom r
-                JOIN tblroomchecklist c ON c.checklist_floorbuilding_id = r.room_building_floor_id
+                JOIN tblroomchecklist c ON c.checklist_room_id = r.room_id
                 LEFT JOIN (
                     SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at
                     FROM tblassignedoperation ao1
@@ -524,13 +524,34 @@
                 ]);
             }
 
-            if ($assigned_id) {
-                $stmt = $this->conn->prepare('SELECT r.room_id, r.room_number, r.room_building_floor_id, bf.building_id, b.building_name, bf.floor_id, f.floor_name, CASE WHEN s.assigned_status_id IS NOT NULL THEN \'Done\' ELSE \'Pending\' END AS status FROM tblroom r JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id JOIN tblbuilding b ON b.building_id = bf.building_id JOIN tblfloor f ON f.floor_id = bf.floor_id LEFT JOIN tblassignedstatus s ON s.room_id = r.room_id AND s.assigned_id = ? AND s.completion_date = CURDATE() WHERE r.room_building_floor_id = ? ORDER BY r.room_number ASC');
-                $stmt->execute([$assigned_id, $assigned_floor_building_id]);
-            } else {
-                $stmt = $this->conn->prepare('SELECT r.room_id, r.room_number, r.room_building_floor_id, bf.building_id, b.building_name, bf.floor_id, f.floor_name, CASE WHEN s.assigned_status_id IS NOT NULL THEN \'Done\' ELSE \'Pending\' END AS status FROM tblroom r JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id JOIN tblbuilding b ON b.building_id = bf.building_id JOIN tblfloor f ON f.floor_id = bf.floor_id LEFT JOIN tblassignedstatus s ON s.room_id = r.room_id AND s.completion_date = CURDATE() WHERE r.room_building_floor_id = ? ORDER BY r.room_number ASC');
-                $stmt->execute([$assigned_floor_building_id]);
+            if (!$assigned_id) {
+                return json_encode([
+                    'success' => false,
+                    'message' => 'Missing required field: assigned_id'
+                ]);
             }
+
+            // Fetch only the assigned rooms from tblassignedrooms for this specific assignment
+            $stmt = $this->conn->prepare('
+                SELECT 
+                    r.room_id, 
+                    r.room_number, 
+                    r.room_building_floor_id, 
+                    bf.building_id, 
+                    b.building_name, 
+                    bf.floor_id, 
+                    f.floor_name, 
+                    CASE WHEN s.assigned_status_id IS NOT NULL THEN \'Done\' ELSE \'Pending\' END AS status 
+                FROM tblassignedrooms ar
+                JOIN tblroom r ON r.room_id = ar.assigned_room_id
+                JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id 
+                JOIN tblbuilding b ON b.building_id = bf.building_id 
+                JOIN tblfloor f ON f.floor_id = bf.floor_id 
+                LEFT JOIN tblassignedstatus s ON s.room_id = r.room_id AND s.assigned_id = ? AND s.completion_date = CURDATE() 
+                WHERE ar.assigned_assigned_id = ?
+                ORDER BY f.floor_name ASC, r.room_number ASC
+            ');
+            $stmt->execute([$assigned_id, $assigned_id]);
             $rooms = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             return json_encode([
@@ -603,11 +624,11 @@
             }
 
             if ($reported_by) {
-                $stmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_name, c.checklist_floorbuilding_id, c.checklist_type, c.checklist_quantity, c.checklist_options, o.operation_id, o.operation_is_functional, o.operation_quantity, o.operation_condition, o.operation_updated_at, o.operation_updated_by FROM tblroomchecklist c LEFT JOIN (SELECT ao1.operation_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at, ao1.operation_updated_by, ao1.operation_room_id, ao1.operation_checklist_id FROM tblassignedoperation ao1 INNER JOIN (SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at FROM tblassignedoperation WHERE operation_updated_by = ? AND DATE(operation_updated_at) = CURDATE() GROUP BY operation_room_id, operation_checklist_id) ao2 ON ao2.operation_room_id = ao1.operation_room_id AND ao2.operation_checklist_id = ao1.operation_checklist_id AND ao2.max_updated_at = ao1.operation_updated_at WHERE ao1.operation_updated_by = ?) o ON o.operation_room_id = ? AND o.operation_checklist_id = c.checklist_id WHERE c.checklist_floorbuilding_id = ? ORDER BY c.checklist_name ASC');
-                $stmt->execute([$reported_by, $reported_by, $room_id, $floorbuilding_id]);
+                $stmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_name, c.checklist_room_id, c.checklist_type, c.checklist_quantity, c.checklist_options, o.operation_id, o.operation_is_functional, o.operation_quantity, o.operation_condition, o.operation_updated_at, o.operation_updated_by FROM tblroomchecklist c LEFT JOIN (SELECT ao1.operation_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at, ao1.operation_updated_by, ao1.operation_room_id, ao1.operation_checklist_id FROM tblassignedoperation ao1 INNER JOIN (SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at FROM tblassignedoperation WHERE operation_updated_by = ? AND DATE(operation_updated_at) = CURDATE() GROUP BY operation_room_id, operation_checklist_id) ao2 ON ao2.operation_room_id = ao1.operation_room_id AND ao2.operation_checklist_id = ao1.operation_checklist_id AND ao2.max_updated_at = ao1.operation_updated_at WHERE ao1.operation_updated_by = ?) o ON o.operation_room_id = ? AND o.operation_checklist_id = c.checklist_id WHERE c.checklist_room_id = ? ORDER BY c.checklist_name ASC');
+                $stmt->execute([$reported_by, $reported_by, $room_id, $room_id]);
             } else {
-                $stmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_name, c.checklist_floorbuilding_id, c.checklist_type, c.checklist_quantity, c.checklist_options, o.operation_id, o.operation_is_functional, o.operation_quantity, o.operation_condition, o.operation_updated_at, o.operation_updated_by FROM tblroomchecklist c LEFT JOIN (SELECT ao1.operation_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at, ao1.operation_updated_by, ao1.operation_room_id, ao1.operation_checklist_id FROM tblassignedoperation ao1 INNER JOIN (SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at FROM tblassignedoperation WHERE DATE(operation_updated_at) = CURDATE() GROUP BY operation_room_id, operation_checklist_id) ao2 ON ao2.operation_room_id = ao1.operation_room_id AND ao2.operation_checklist_id = ao1.operation_checklist_id AND ao2.max_updated_at = ao1.operation_updated_at) o ON o.operation_room_id = ? AND o.operation_checklist_id = c.checklist_id WHERE c.checklist_floorbuilding_id = ? ORDER BY c.checklist_name ASC');
-                $stmt->execute([$room_id, $floorbuilding_id]);
+                $stmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_name, c.checklist_room_id, c.checklist_type, c.checklist_quantity, c.checklist_options, o.operation_id, o.operation_is_functional, o.operation_quantity, o.operation_condition, o.operation_updated_at, o.operation_updated_by FROM tblroomchecklist c LEFT JOIN (SELECT ao1.operation_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at, ao1.operation_updated_by, ao1.operation_room_id, ao1.operation_checklist_id FROM tblassignedoperation ao1 INNER JOIN (SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at FROM tblassignedoperation WHERE DATE(operation_updated_at) = CURDATE() GROUP BY operation_room_id, operation_checklist_id) ao2 ON ao2.operation_room_id = ao1.operation_room_id AND ao2.operation_checklist_id = ao1.operation_checklist_id AND ao2.max_updated_at = ao1.operation_updated_at) o ON o.operation_room_id = ? AND o.operation_checklist_id = c.checklist_id WHERE c.checklist_room_id = ? ORDER BY c.checklist_name ASC');
+                $stmt->execute([$room_id, $room_id]);
             }
 
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -686,7 +707,7 @@
             }
 
             // Get checklist type to determine how to store the value
-            $checklistStmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_type, c.checklist_quantity FROM tblroomchecklist c JOIN tblroom r ON r.room_building_floor_id = c.checklist_floorbuilding_id WHERE c.checklist_id = ? AND r.room_id = ?');
+            $checklistStmt = $this->conn->prepare('SELECT c.checklist_id, c.checklist_type, c.checklist_quantity FROM tblroomchecklist c WHERE c.checklist_id = ? AND c.checklist_room_id = ?');
             $checklistStmt->execute([$checklist_id, $room_id]);
             $checklistInfo = $checklistStmt->fetch(PDO::FETCH_ASSOC);
             if (!$checklistInfo) {

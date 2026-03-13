@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
 import { SecureStorage } from '../../utils/encryption';
 import { getApiBaseUrl } from '../../utils/apiConfig';
 import { toast } from '../../utils/toast';
@@ -52,6 +54,9 @@ export default function AdminActivity() {
   const [rangeCurrentPage, setRangeCurrentPage] = useState(1);
   const rangeItemsPerPage = 10;
 
+  // Month filter state for assignment range
+  const [rangeMonthFilter, setRangeMonthFilter] = useState('');
+
   const baseUrl = useMemo(() => {
     const storedUrl = SecureStorage.getLocalItem('janitorial_url');
     return withSlash(storedUrl || getApiBaseUrl());
@@ -75,19 +80,29 @@ export default function AdminActivity() {
   const endItem = Math.min(currentPage * itemsPerPage, filtered.length);
 
   // Pagination logic for assignment range
+  const filteredRangeDays = useMemo(() => {
+    if (!rangeMonthFilter) return rangeDays;
+    const [filterYear, filterMonth] = rangeMonthFilter.split('-').map(Number);
+    return rangeDays.filter((d) => {
+      const [year, month] = String(d.date).split('-').map(Number);
+      return year === filterYear && month === filterMonth;
+    });
+  }, [rangeDays, rangeMonthFilter]);
+
   const paginatedRangeDays = useMemo(() => {
     const startIndex = (rangeCurrentPage - 1) * rangeItemsPerPage;
     const endIndex = startIndex + rangeItemsPerPage;
-    return rangeDays.slice(startIndex, endIndex);
-  }, [rangeDays, rangeCurrentPage, rangeItemsPerPage]);
+    return filteredRangeDays.slice(startIndex, endIndex);
+  }, [filteredRangeDays, rangeCurrentPage, rangeItemsPerPage]);
 
-  const rangeTotalPages = Math.ceil(rangeDays.length / rangeItemsPerPage);
+  const rangeTotalPages = Math.ceil(filteredRangeDays.length / rangeItemsPerPage);
   const rangeStartItem = (rangeCurrentPage - 1) * rangeItemsPerPage + 1;
-  const rangeEndItem = Math.min(rangeCurrentPage * rangeItemsPerPage, rangeDays.length);
+  const rangeEndItem = Math.min(rangeCurrentPage * rangeItemsPerPage, filteredRangeDays.length);
 
   // Reset page when assignment changes
   useEffect(() => {
     setRangeCurrentPage(1);
+    setRangeMonthFilter(''); // Reset month filter when assignment changes
   }, [selectedAssignmentId]);
 
   // Reset page when search changes
@@ -96,7 +111,19 @@ export default function AdminActivity() {
   }, [search]);
 
 
-  const fmtDate = (val) => {
+  // Generate month options from rangeDays
+  const monthOptions = useMemo(() => {
+    const months = new Map();
+    for (const d of rangeDays) {
+      const [year, month] = String(d.date).split('-');
+      const key = `${year}-${month}`;
+      const monthName = new Date(Number(year), Number(month) - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      months.set(key, monthName);
+    }
+    return Array.from(months.entries()).sort().reverse();
+  }, [rangeDays]);
+
+  const fmtDate = useCallback((val) => {
     if (!val) return '';
     const raw = String(val);
     const ymdOnly = /^\d{4}-\d{2}-\d{2}$/;
@@ -109,7 +136,7 @@ export default function AdminActivity() {
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return raw;
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  };
+  }, []);
 
   const fmtTime = (val) => {
     if (!val) return '';
@@ -360,6 +387,389 @@ export default function AdminActivity() {
 
   const todayYmd = useMemo(() => getManilaDate(), []);
 
+  // Helper function to fetch inspection details for a date
+  const fetchInspectionDetails = useCallback(async (userId, selectedDate) => {
+    try {
+      const res = await axios.post(
+        `${baseUrl}admin.php`,
+        { operation: 'getStudentInspectionsByDate', json: { user_id: Number(userId), date: selectedDate } },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      if (res?.data?.success) {
+        return Array.isArray(res.data.data) ? res.data.data : [];
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }, [baseUrl]);
+
+  // Helper function to format checklist item
+  const formatChecklistItem = (item) => {
+    const itemType = item?.checklist_type || 'boolean';
+    const expectedQty = item?.checklist_quantity;
+
+    if (itemType === 'quantity') {
+      const numVal = item?.operation_quantity !== null && item?.operation_quantity !== undefined
+        ? Number(item.operation_quantity)
+        : null;
+      if (numVal !== null && !isNaN(numVal)) {
+        return `${numVal} / ${expectedQty}`;
+      }
+      return `- / ${expectedQty}`;
+    }
+
+    if (itemType === 'condition') {
+      const conditionVal = item?.operation_condition;
+      if (conditionVal !== null && conditionVal !== undefined && String(conditionVal).trim() !== '') {
+        return String(conditionVal).charAt(0).toUpperCase() + String(conditionVal).slice(1);
+      }
+      return 'Pending';
+    }
+
+    // Boolean (default)
+    const v = item?.operation_is_functional;
+    const n = v === null || v === undefined ? null : Number(v);
+    if (n === 1) return 'OK';
+    if (n === 0) return 'Not OK';
+    return 'Pending';
+  };
+
+  // Export to Excel
+  const handleDownloadExcel = useCallback(async () => {
+    if (!selectedAssignmentId || !rangeSummary || !selectedAssignment) {
+      toast.error('Please select an assignment first');
+      return;
+    }
+
+    try {
+      toast.success('Generating detailed Excel report...');
+
+      const wsData = [];
+
+      // Title
+      wsData.push(['STUDENT ACTIVITY REPORT']);
+      wsData.push([]);
+
+      // Report metadata
+      wsData.push(['Student:', rangeSummary.studentName]);
+      wsData.push(['Building:', rangeSummary.buildingName]);
+      wsData.push(['Floor:', rangeSummary.floorName]);
+      wsData.push(['Period:', `${fmtDate(rangeSummary.start)} - ${fmtDate(rangeSummary.end)}`]);
+      wsData.push(['Generated:', new Date().toLocaleDateString()]);
+      wsData.push([]);
+
+      // Process each day
+      for (const day of rangeDays) {
+        const dateFormatted = fmtDate(day.date);
+
+        // Section header for the date
+        wsData.push([`DATE: ${dateFormatted}`, '', '', '', '']);
+
+        // Fetch inspection details for this date
+        const inspections = await fetchInspectionDetails(selectedAssignment.assigned_user_id, day.date);
+
+        if (inspections.length === 0 && day.inspected_rooms === 0) {
+          // No inspections - show as missed
+          wsData.push(['Room', 'Status', 'Remarks', 'Checklist Item', 'Value']);
+          wsData.push(['-', 'Missed', '-', '-', '-']);
+        } else {
+          // Headers for this date's inspections
+          wsData.push(['Room', 'Status', 'Remarks', 'Checklist Item', 'Value']);
+
+          // Process each inspection
+          inspections.forEach((insp, idx) => {
+            const hasUpdate = !!insp.assigned_updated_at;
+            const isPastDate = String(day.date) < String(todayYmd);
+            const displayStatus = insp.assigned_status || (hasUpdate ? 'Done' : (isPastDate ? 'Missed' : 'Pending'));
+
+            const checklist = Array.isArray(insp.checklist) ? insp.checklist : [];
+
+            if (checklist.length === 0) {
+              // No checklist items - just show room info
+              wsData.push([
+                `Room ${insp.room_number || 'N/A'}`,
+                displayStatus,
+                insp.assigned_remarks || '-',
+                '-',
+                '-'
+              ]);
+            } else {
+              // Show room info with first checklist item
+              wsData.push([
+                `Room ${insp.room_number || 'N/A'}`,
+                displayStatus,
+                insp.assigned_remarks || '-',
+                checklist[0].checklist_name,
+                formatChecklistItem(checklist[0])
+              ]);
+
+              // Additional checklist items
+              for (let i = 1; i < checklist.length; i++) {
+                wsData.push([
+                  '',
+                  '',
+                  '',
+                  checklist[i].checklist_name,
+                  formatChecklistItem(checklist[i])
+                ]);
+              }
+            }
+
+            // Add empty row between rooms (except last one)
+            if (idx < inspections.length - 1) {
+              wsData.push(['', '', '', '', '']);
+            }
+          });
+        }
+
+        // Empty row between dates
+        wsData.push([]);
+      }
+
+      // Summary section
+      wsData.push(['SUMMARY']);
+      wsData.push(['Total Days:', rangeSummary.dayCount]);
+      wsData.push(['Days with Inspections:', rangeSummary.inspectedDays]);
+      wsData.push(['Total Rooms Inspected:', rangeSummary.roomsInspected]);
+      wsData.push(['Expected Rooms:', rangeSummary.expectedRooms]);
+      wsData.push(['Progress:', `${Math.round(rangeSummary.progressPct)}%`]);
+
+      // Create worksheet
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 20 },
+        { wch: 15 },
+        { wch: 25 },
+        { wch: 25 },
+        { wch: 15 }
+      ];
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Activity Report');
+
+      // Generate Excel file
+      const excelBuffer = XLSX.write(wb, { type: 'buffer' });
+      const blob = new Blob([excelBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `activity-report-${selectedAssignmentId}-${Date.now()}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success('Excel report exported successfully');
+    } catch (error) {
+      console.error('Error generating Excel:', error);
+      toast.error('Failed to generate Excel report');
+    }
+  }, [selectedAssignmentId, rangeSummary, rangeDays, fmtDate, selectedAssignment, fetchInspectionDetails, todayYmd]);
+
+  // Export to PDF
+  const handleDownloadPDF = useCallback(async () => {
+    if (!selectedAssignmentId || !rangeSummary || !selectedAssignment) {
+      toast.error('Please select an assignment first');
+      return;
+    }
+
+    try {
+      toast.success('Generating detailed PDF report...');
+
+      const doc = new jsPDF();
+
+      // Header
+      doc.setFontSize(18);
+      doc.setTextColor(16, 185, 129);
+      doc.text('Student Activity Report', 14, 22);
+
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
+
+      // Student info
+      doc.setFontSize(11);
+      doc.setTextColor(0);
+      doc.setFont(undefined, 'bold');
+      doc.text('Student:', 14, 42);
+      doc.setFont(undefined, 'normal');
+      doc.text(rangeSummary.studentName, 45, 42);
+
+      doc.setFont(undefined, 'bold');
+      doc.text('Building:', 14, 48);
+      doc.setFont(undefined, 'normal');
+      doc.text(rangeSummary.buildingName, 45, 48);
+
+      doc.setFont(undefined, 'bold');
+      doc.text('Floor:', 14, 54);
+      doc.setFont(undefined, 'normal');
+      doc.text(rangeSummary.floorName, 45, 54);
+
+      doc.setFont(undefined, 'bold');
+      doc.text('Period:', 14, 60);
+      doc.setFont(undefined, 'normal');
+      doc.text(`${fmtDate(rangeSummary.start)} - ${fmtDate(rangeSummary.end)}`, 45, 60);
+
+      let currentY = 70;
+      const pageHeight = 280;
+
+      // Process each day
+      for (const day of rangeDays) {
+        // Check if we need a new page
+        if (currentY > pageHeight - 40) {
+          doc.addPage();
+          currentY = 20;
+        }
+
+        // Date header
+        doc.setFontSize(12);
+        doc.setTextColor(16, 185, 129);
+        doc.setFont(undefined, 'bold');
+        doc.text(fmtDate(day.date), 14, currentY);
+        currentY += 8;
+
+        // Fetch inspection details for this date
+        const inspections = await fetchInspectionDetails(selectedAssignment.assigned_user_id, day.date);
+
+        if (inspections.length === 0 && day.inspected_rooms === 0) {
+          // No inspections - show as missed
+          doc.setFontSize(10);
+          doc.setTextColor(190, 18, 60);
+          doc.setFont(undefined, 'bold');
+          doc.text('Missed - No inspections recorded', 14, currentY);
+          currentY += 10;
+        } else {
+          // Process each inspection
+          for (const insp of inspections) {
+            // Check page break
+            if (currentY > pageHeight - 60) {
+              doc.addPage();
+              currentY = 20;
+            }
+
+            const hasUpdate = !!insp.assigned_updated_at;
+            const isPastDate = String(day.date) < String(todayYmd);
+            const displayStatus = insp.assigned_status || (hasUpdate ? 'Done' : (isPastDate ? 'Missed' : 'Pending'));
+
+            const statusColors = {
+              'excellent': [16, 185, 129],
+              'good': [59, 130, 246],
+              'fair': [245, 158, 11],
+              'poor': [239, 68, 68],
+              'Done': [16, 185, 129],
+              'Missed': [239, 68, 68],
+              'Pending': [100, 100, 100]
+            };
+
+            // Room header
+            doc.setFontSize(10);
+            doc.setTextColor(0);
+            doc.setFont(undefined, 'bold');
+            doc.text(`Room ${insp.room_number || 'N/A'}`, 14, currentY);
+
+            // Status badge
+            const statusColor = statusColors[displayStatus] || [100, 100, 100];
+            doc.setTextColor(...statusColor);
+            doc.text(displayStatus, 60, currentY);
+            currentY += 6;
+
+            // Building/Floor info
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.setFont(undefined, 'normal');
+            doc.text(`${insp.building_name}${insp.floor_name ? ` • ${insp.floor_name}` : ''}`, 14, currentY);
+            currentY += 6;
+
+            // Remarks
+            if (insp.assigned_remarks) {
+              doc.setFontSize(8);
+              doc.setTextColor(71, 85, 105);
+              doc.setFont(undefined, 'italic');
+              doc.text(`Remarks: ${insp.assigned_remarks}`, 14, currentY);
+              doc.setFont(undefined, 'normal');
+              currentY += 6;
+            }
+
+              // Checklist items
+            const checklist = Array.isArray(insp.checklist) ? insp.checklist : [];
+            if (checklist.length > 0) {
+              doc.setFontSize(8);
+              doc.setTextColor(100);
+              doc.setFont(undefined, 'bold');
+              doc.text('Checklist:', 14, currentY);
+              currentY += 5;
+
+              for (const item of checklist) {
+                const value = formatChecklistItem(item);
+                let valueColor = [100, 100, 100];
+
+                if (value === 'OK') valueColor = [16, 185, 129];
+                else if (value === 'Not OK') valueColor = [239, 68, 68];
+                else if (value !== 'Pending') valueColor = [59, 130, 246];
+
+                doc.setTextColor(71, 85, 105);
+                doc.setFont(undefined, 'normal');
+                doc.text(`  • ${item.checklist_name}:`, 14, currentY);
+
+                doc.setTextColor(...valueColor);
+                doc.setFont(undefined, 'bold');
+                doc.text(value, 80, currentY);
+                currentY += 5;
+              }
+            }
+
+            currentY += 6;
+          }
+        }
+
+        // Separator line
+        doc.setDrawColor(200, 200, 200);
+        doc.line(14, currentY, 196, currentY);
+        currentY += 8;
+      }
+
+      // Check if we need a new page for summary
+      if (currentY > pageHeight - 60) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      // Summary section
+      doc.setFontSize(12);
+      doc.setTextColor(0);
+      doc.setFont(undefined, 'bold');
+      doc.text('Summary', 14, currentY);
+      currentY += 10;
+
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Total Days: ${rangeSummary.dayCount}`, 14, currentY);
+      currentY += 6;
+      doc.text(`Days with Inspections: ${rangeSummary.inspectedDays}`, 14, currentY);
+      currentY += 6;
+      doc.text(`Total Rooms Inspected: ${rangeSummary.roomsInspected}`, 14, currentY);
+      currentY += 6;
+      doc.text(`Expected Rooms: ${rangeSummary.expectedRooms}`, 14, currentY);
+      currentY += 6;
+      doc.text(`Progress: ${Math.round(rangeSummary.progressPct)}%`, 14, currentY);
+
+      // Save PDF
+      doc.save(`activity-report-${selectedAssignmentId}-${Date.now()}.pdf`);
+
+      toast.success('PDF report exported successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF report');
+    }
+  }, [selectedAssignmentId, rangeSummary, rangeDays, fmtDate, selectedAssignment, fetchInspectionDetails, todayYmd]);
+
   useEffect(() => {
     loadSummary();
   }, [loadSummary]);
@@ -444,13 +854,66 @@ export default function AdminActivity() {
                     </option>
                   ))}
                 </select>
+
+                {selectedAssignmentId && rangeSummary && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleDownloadPDF}
+                      disabled={rangeLoading}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-60"
+                    >
+                      <span>Download PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadExcel}
+                      disabled={rangeLoading}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 disabled:opacity-60"
+                    >
+                      <span>Download Excel</span>
+                    </button>
+                  </>
+                )}
               </div>
 
              
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,.08)]">
-             
+              {/* Month Filter */}
+              {monthOptions.length > 0 && (
+                <div className="border-b border-slate-200 bg-slate-50 px-5 py-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="text-xs font-medium text-slate-600">Filter by month:</label>
+                    <select
+                      value={rangeMonthFilter}
+                      onChange={(e) => {
+                        setRangeMonthFilter(e.target.value);
+                        setRangeCurrentPage(1);
+                      }}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    >
+                      <option value="">All months</option>
+                      {monthOptions.map(([key, label]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                    </select>
+                    {rangeMonthFilter && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRangeMonthFilter('');
+                          setRangeCurrentPage(1);
+                        }}
+                        className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                      >
+                        Clear filter
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="w-full overflow-x-auto">
                 <div className="min-w-[520px]">
@@ -466,8 +929,10 @@ export default function AdminActivity() {
                       <div className="px-5 py-6 text-sm text-slate-500">Loading range…</div>
                     ) : !selectedAssignmentId ? (
                       <div className="px-5 py-6 text-sm text-slate-500">Select an assignment then click “View Progress”.</div>
-                    ) : rangeDays.length === 0 ? (
-                      <div className="px-5 py-6 text-sm text-slate-500">No days to show in this range.</div>
+                    ) : filteredRangeDays.length === 0 ? (
+                      <div className="px-5 py-6 text-sm text-slate-500">
+                        {rangeMonthFilter ? 'No days to show for the selected month.' : 'No days to show in this range.'}
+                      </div>
                     ) : (
                       paginatedRangeDays.map((d) => {
                         const inspected = Number(d.inspected_rooms) || 0;
@@ -497,7 +962,10 @@ export default function AdminActivity() {
                 <div className="border-t border-slate-200 bg-slate-50 px-5 py-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="text-sm text-slate-600">
-                      Showing <span className="font-semibold text-slate-900">{rangeStartItem}</span> to <span className="font-semibold text-slate-900">{rangeEndItem}</span> of <span className="font-semibold text-slate-900">{rangeDays.length}</span> days
+                      Showing <span className="font-semibold text-slate-900">{rangeStartItem}</span> to <span className="font-semibold text-slate-900">{rangeEndItem}</span> of <span className="font-semibold text-slate-900">{filteredRangeDays.length}</span> days
+                      {rangeMonthFilter && (
+                        <span className="ml-1 text-slate-500">(filtered)</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <button

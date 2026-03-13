@@ -12,9 +12,11 @@ export default function AdminAssignments() {
   
   const [students, setStudents] = useState([]);
   const [buildings, setBuildings] = useState([]);
-  const [floors, setFloors] = useState([]);
+  const [rooms, setRooms] = useState({});
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedRoomIds, setSelectedRoomIds] = useState([]);
+  const [floorFilter, setFloorFilter] = useState('all'); // 'all' or specific floor name
 
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -48,7 +50,9 @@ export default function AdminAssignments() {
       assigned_end_date: '',
       assigned_status_enum: 'active'
     });
-    setFloors([]);
+    setRooms({});
+    setSelectedRoomIds([]);
+    setFloorFilter('all');
   };
 
   const openCreate = () => {
@@ -69,6 +73,10 @@ export default function AdminAssignments() {
       assigned_end_date: a?.assigned_end_date ? String(a.assigned_end_date).slice(0, 10) : '',
       assigned_status_enum: a?.assigned_status_enum || 'active'
     });
+    // Load assigned rooms for this assignment
+    if (a?.assigned_id) {
+      loadAssignedRooms(a.assigned_id);
+    }
     setOpenModal(true);
   };
 
@@ -80,10 +88,7 @@ export default function AdminAssignments() {
 
   const loadFloorsByBuilding = useCallback(async (building_id) => {
     const bId = building_id === '' ? '' : Number(building_id);
-    if (!bId) {
-      setFloors([]);
-      return;
-    }
+    if (!bId) return;
 
     try {
       const res = await axios.post(
@@ -91,15 +96,58 @@ export default function AdminAssignments() {
         { operation: 'getFloors', json: { building_id: bId } },
         { headers: { 'Content-Type': 'application/json' } }
       );
-      if (res?.data?.success) {
-        setFloors(Array.isArray(res.data.data) ? res.data.data : []);
-      } else {
-        setFloors([]);
+      if (!res?.data?.success) {
         toast.error(res?.data?.message || 'Failed to load floors.');
       }
     } catch (e) {
-      setFloors([]);
       toast.error('Network error. Please try again.');
+    }
+  }, [baseUrl]);
+
+  const loadRoomsByBuilding = useCallback(async (building_id) => {
+    const bId = building_id === '' ? '' : Number(building_id);
+    if (!bId) {
+      setRooms({});
+      return;
+    }
+
+    try {
+      const res = await axios.post(
+        `${baseUrl}admin.php`,
+        { operation: 'getRoomsByBuilding', json: { building_id: bId } },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      if (res?.data?.success) {
+        setRooms(res.data.data || {});
+      } else {
+        setRooms({});
+        toast.error(res?.data?.message || 'Failed to load rooms.');
+      }
+    } catch (e) {
+      setRooms({});
+      toast.error('Network error. Please try again.');
+    }
+  }, [baseUrl]);
+
+  const loadAssignedRooms = useCallback(async (assigned_id) => {
+    if (!assigned_id) {
+      setSelectedRoomIds([]);
+      return;
+    }
+
+    try {
+      const res = await axios.post(
+        `${baseUrl}admin.php`,
+        { operation: 'getAssignedRooms', json: { assigned_id } },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      if (res?.data?.success && Array.isArray(res.data.data)) {
+        setSelectedRoomIds(res.data.data.map(r => r.assigned_room_id.toString()));
+      } else {
+        setSelectedRoomIds([]);
+      }
+    } catch (e) {
+      setSelectedRoomIds([]);
     }
   }, [baseUrl]);
 
@@ -149,6 +197,14 @@ export default function AdminAssignments() {
     loadFloorsByBuilding(form.building_id);
   }, [openModal, form.building_id, loadFloorsByBuilding]);
 
+  useEffect(() => {
+    if (!openModal) return;
+    loadRoomsByBuilding(form.building_id);
+    if (modalMode === 'create') {
+      setSelectedRoomIds([]);
+    }
+  }, [openModal, form.building_id, loadRoomsByBuilding, modalMode]);
+
   const submit = async (e) => {
     e.preventDefault();
 
@@ -182,8 +238,9 @@ export default function AdminAssignments() {
       return;
     }
 
-    if (!assigned_floor_building_id) {
-      toast.error('Please select a floor.');
+    const roomIds = selectedRoomIds.map(id => Number(id)).filter(id => id > 0);
+    if (roomIds.length === 0) {
+      toast.error('Please select at least one room.');
       return;
     }
 
@@ -207,7 +264,8 @@ export default function AdminAssignments() {
               assigned_floor_building_id,
               assigned_start_date,
               assigned_end_date,
-              assigned_status_enum
+              assigned_status_enum,
+              room_ids: roomIds
             }
           : {
               assigned_user_id,
@@ -215,7 +273,8 @@ export default function AdminAssignments() {
               assigned_start_date,
               assigned_end_date,
               assigned_status_enum,
-              assigned_by_user_id
+              assigned_by_user_id,
+              room_ids: roomIds
             };
 
       const res = await axios.post(
@@ -355,7 +414,7 @@ export default function AdminAssignments() {
             if (e.target === e.currentTarget) closeModal();
           }}
         >
-          <div className={`w-full rounded-2xl bg-white p-5 shadow-xl ${isMobile ? 'max-w-full h-full overflow-y-auto' : 'max-w-xl'}`}>
+          <div className={`w-full max-h-[85vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-xl ${isMobile ? 'max-w-full h-full' : 'max-w-2xl'}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="text-base font-semibold text-slate-900">{modalMode === 'edit' ? 'Edit Assignment' : 'Add Assignment'}</div>
               <button type="button" onClick={closeModal} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100">
@@ -395,22 +454,90 @@ export default function AdminAssignments() {
                 </label>
 
                 <label className="grid gap-2 text-sm font-semibold text-slate-800">
-                  Floor
+                  Floor Filter
                   <select
-                    value={form.assigned_floor_building_id}
-                    onChange={(e) => setForm((p) => ({ ...p, assigned_floor_building_id: e.target.value }))}
-                    disabled={!form.building_id || floors.length === 0}
+                    value={floorFilter}
+                    onChange={(e) => setFloorFilter(e.target.value)}
+                    disabled={!form.building_id || Object.keys(rooms).length === 0}
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:opacity-60"
                   >
-                    <option value="">
-                      {!form.building_id ? 'Select building first...' : (floors.length === 0 ? 'No floors available...' : 'Select floor...')}
-                    </option>
-                    {floors.map((f) => (
-                      <option key={f.floorbuilding_id} value={f.floorbuilding_id}>{f.floor_name}</option>
+                    <option value="all">All Floors</option>
+                    {Object.keys(rooms).map((floorName) => (
+                      <option key={floorName} value={floorName}>{floorName}</option>
                     ))}
                   </select>
                 </label>
               </div>
+
+              {/* Room Selection - Grouped by Floor */}
+              {form.building_id && Object.keys(rooms).length > 0 && (
+                <div className="grid gap-3">
+                  <label className="text-sm font-semibold text-slate-800">Select Rooms</label>
+                  <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3">
+                    {Object.entries(rooms)
+                      .filter(([floorName]) => floorFilter === 'all' || floorFilter === floorName)
+                      .map(([floorName, floorRooms]) => (
+                      <div key={floorName} className="mb-4 last:mb-0">
+                        <div className="mb-2 flex items-center justify-between">
+                          <h4 className="text-sm font-semibold text-slate-700">{floorName}</h4>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const floorRoomIds = floorRooms.map(r => r.room_id.toString());
+                              const allSelected = floorRoomIds.every(id => selectedRoomIds.includes(id));
+                              if (allSelected) {
+                                // Deselect all rooms from this floor
+                                setSelectedRoomIds(prev => prev.filter(id => !floorRoomIds.includes(id)));
+                              } else {
+                                // Select all rooms from this floor
+                                setSelectedRoomIds(prev => [...new Set([...prev, ...floorRoomIds])]);
+                              }
+                            }}
+                            className="text-xs font-medium text-emerald-600 hover:text-emerald-700"
+                          >
+                            {floorRooms.every(r => selectedRoomIds.includes(r.room_id.toString())) ? 'Deselect All' : 'Select All'}
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                          {floorRooms.map((room) => (
+                            <label
+                              key={room.room_id}
+                              className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 hover:bg-slate-100"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedRoomIds.includes(room.room_id.toString())}
+                                onChange={(e) => {
+                                  const roomId = room.room_id.toString();
+                                  if (e.target.checked) {
+                                    setSelectedRoomIds((prev) => [...prev, roomId]);
+                                  } else {
+                                    setSelectedRoomIds((prev) => prev.filter((id) => id !== roomId));
+                                  }
+                                }}
+                                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span className="text-sm text-slate-700">{room.room_number}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {selectedRoomIds.length === 0 && (
+                    <p className="text-xs text-amber-600">Please select at least one room</p>
+                  )}
+                  <p className="text-xs text-slate-500">
+                    {selectedRoomIds.length} room(s) selected
+                    {floorFilter !== 'all' && ` from ${floorFilter}`}
+                  </p>
+                </div>
+              )}
+              {form.building_id && Object.keys(rooms).length === 0 && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
+                  <p className="text-sm text-slate-500">No rooms available for this building</p>
+                </div>
+              )}
 
               <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'sm:grid-cols-2'}`}>
                 <label className="grid gap-2 text-sm font-semibold text-slate-800">

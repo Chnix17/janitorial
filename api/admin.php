@@ -79,23 +79,23 @@
 
      public function getRoomChecklists($data) {
          try {
-             if (!is_array($data) || !isset($data['floorbuilding_id'])) {
+             if (!is_array($data) || !isset($data['room_id'])) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Missing required field: floorbuilding_id'
+                     'message' => 'Missing required field: room_id'
                  ]);
              }
 
-             $floorbuilding_id = (int)$data['floorbuilding_id'];
-             if ($floorbuilding_id <= 0) {
+             $room_id = (int)$data['room_id'];
+             if ($room_id <= 0) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Invalid floorbuilding_id.'
+                     'message' => 'Invalid room_id.'
                  ]);
              }
 
-             $stmt = $this->conn->prepare('SELECT checklist_id, checklist_name, checklist_floorbuilding_id, checklist_type, checklist_quantity, checklist_options FROM tblroomchecklist WHERE checklist_floorbuilding_id = ? ORDER BY checklist_name ASC');
-             $stmt->execute([$floorbuilding_id]);
+             $stmt = $this->conn->prepare('SELECT checklist_id, checklist_name, checklist_room_id, checklist_type, checklist_quantity, checklist_options FROM tblroomchecklist WHERE checklist_room_id = ? ORDER BY checklist_name ASC');
+             $stmt->execute([$room_id]);
              $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
              return json_encode([
@@ -179,23 +179,23 @@
 
      public function createChecklist($data) {
          try {
-             if (!is_array($data) || !isset($data['checklist_floorbuilding_id'], $data['checklist_name'])) {
+             if (!is_array($data) || !isset($data['checklist_room_id'], $data['checklist_name'])) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Missing required fields: checklist_floorbuilding_id, checklist_name'
+                     'message' => 'Missing required fields: checklist_room_id, checklist_name'
                  ]);
              }
 
-             $floorbuilding_id = (int)$data['checklist_floorbuilding_id'];
+             $room_id = (int)$data['checklist_room_id'];
              $name = trim((string)$data['checklist_name']);
              $type = isset($data['checklist_type']) ? $data['checklist_type'] : 'boolean';
              $quantity = isset($data['checklist_quantity']) ? (int)$data['checklist_quantity'] : null;
              $options = isset($data['checklist_options']) ? trim((string)$data['checklist_options']) : null;
 
-             if ($floorbuilding_id <= 0) {
+             if ($room_id <= 0) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Invalid checklist_floorbuilding_id.'
+                     'message' => 'Invalid checklist_room_id.'
                  ]);
              }
              if ($name === '') {
@@ -205,26 +205,26 @@
                  ]);
              }
 
-             $checkFloor = $this->conn->prepare('SELECT floorbuilding_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
-             $checkFloor->execute([$floorbuilding_id]);
-             if (!$checkFloor->fetch(PDO::FETCH_ASSOC)) {
+             $checkRoom = $this->conn->prepare('SELECT room_id FROM tblroom WHERE room_id = ?');
+             $checkRoom->execute([$room_id]);
+             if (!$checkRoom->fetch(PDO::FETCH_ASSOC)) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Floor not found.'
+                     'message' => 'Room not found.'
                  ]);
              }
 
-             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_floorbuilding_id = ? AND LOWER(checklist_name) = LOWER(?)');
-             $checkDup->execute([$floorbuilding_id, $name]);
+             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_room_id = ? AND LOWER(checklist_name) = LOWER(?)');
+             $checkDup->execute([$room_id, $name]);
              if ($checkDup->fetch(PDO::FETCH_ASSOC)) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Checklist already exists for this floor.'
+                     'message' => 'Checklist already exists for this room.'
                  ]);
              }
 
-             $stmt = $this->conn->prepare('INSERT INTO tblroomchecklist (checklist_name, checklist_floorbuilding_id, checklist_type, checklist_quantity, checklist_options) VALUES (?, ?, ?, ?, ?)');
-             $stmt->execute([$name, $floorbuilding_id, $type, $quantity, $options]);
+             $stmt = $this->conn->prepare('INSERT INTO tblroomchecklist (checklist_name, checklist_room_id, checklist_type, checklist_quantity, checklist_options) VALUES (?, ?, ?, ?, ?)');
+             $stmt->execute([$name, $room_id, $type, $quantity, $options]);
 
              return json_encode([
                  'success' => true,
@@ -267,7 +267,7 @@
                  ]);
              }
 
-             $get = $this->conn->prepare('SELECT checklist_id, checklist_floorbuilding_id FROM tblroomchecklist WHERE checklist_id = ?');
+             $get = $this->conn->prepare('SELECT checklist_id, checklist_room_id FROM tblroomchecklist WHERE checklist_id = ?');
              $get->execute([$checklist_id]);
              $existing = $get->fetch(PDO::FETCH_ASSOC);
              if (!$existing) {
@@ -277,13 +277,13 @@
                  ]);
              }
 
-             $floorbuilding_id = (int)$existing['checklist_floorbuilding_id'];
-             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_floorbuilding_id = ? AND LOWER(checklist_name) = LOWER(?) AND checklist_id <> ?');
-             $checkDup->execute([$floorbuilding_id, $name, $checklist_id]);
+             $room_id = (int)$existing['checklist_room_id'];
+             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_room_id = ? AND LOWER(checklist_name) = LOWER(?) AND checklist_id <> ?');
+             $checkDup->execute([$room_id, $name, $checklist_id]);
              if ($checkDup->fetch(PDO::FETCH_ASSOC)) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Checklist already exists for this floor.'
+                     'message' => 'Checklist already exists for this room.'
                  ]);
              }
 
@@ -345,18 +345,18 @@
 
      public function createChecklistBulk($data) {
          try {
-             if (!is_array($data) || !isset($data['checklist_floorbuilding_id'])) {
+             if (!is_array($data) || !isset($data['checklist_room_id'])) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Missing required field: checklist_floorbuilding_id'
+                     'message' => 'Missing required field: checklist_room_id'
                  ]);
              }
 
-             $floorbuilding_id = (int)$data['checklist_floorbuilding_id'];
-             if ($floorbuilding_id <= 0) {
+             $room_id = (int)$data['checklist_room_id'];
+             if ($room_id <= 0) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Invalid checklist_floorbuilding_id.'
+                     'message' => 'Invalid checklist_room_id.'
                  ]);
              }
 
@@ -395,12 +395,12 @@
                  ]);
              }
 
-             $checkFloor = $this->conn->prepare('SELECT floorbuilding_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
-             $checkFloor->execute([$floorbuilding_id]);
-             if (!$checkFloor->fetch(PDO::FETCH_ASSOC)) {
+             $checkRoom = $this->conn->prepare('SELECT room_id FROM tblroom WHERE room_id = ?');
+             $checkRoom->execute([$room_id]);
+             if (!$checkRoom->fetch(PDO::FETCH_ASSOC)) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Floor not found.'
+                     'message' => 'Room not found.'
                  ]);
              }
 
@@ -409,18 +409,18 @@
              $inserted = 0;
              $skipped = [];
 
-             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_floorbuilding_id = ? AND LOWER(checklist_name) = LOWER(?)');
-             $ins = $this->conn->prepare('INSERT INTO tblroomchecklist (checklist_name, checklist_floorbuilding_id, checklist_type, checklist_quantity, checklist_options) VALUES (?, ?, ?, ?, ?)');
+             $checkDup = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_room_id = ? AND LOWER(checklist_name) = LOWER(?)');
+             $ins = $this->conn->prepare('INSERT INTO tblroomchecklist (checklist_name, checklist_room_id, checklist_type, checklist_quantity, checklist_options) VALUES (?, ?, ?, ?, ?)');
 
              foreach ($items as $item) {
-                 $checkDup->execute([$floorbuilding_id, $item['name']]);
+                 $checkDup->execute([$room_id, $item['name']]);
                  if ($checkDup->fetch(PDO::FETCH_ASSOC)) {
                      $skipped[] = $item['name'];
                      continue;
                  }
                  $qty = ($item['type'] === 'quantity') ? $item['quantity'] : null;
                  $opts = ($item['type'] === 'condition') ? $item['options'] : null;
-                 $ins->execute([$item['name'], $floorbuilding_id, $item['type'], $qty, $opts]);
+                 $ins->execute([$item['name'], $room_id, $item['type'], $qty, $opts]);
                  $inserted++;
              }
 
@@ -937,12 +937,23 @@
                  ]);
              }
 
-             $checkAssign = $this->conn->prepare('SELECT assignment_id FROM tblassignment WHERE room_id = ? LIMIT 1');
-             $checkAssign->execute([$room_id]);
-             if ($checkAssign->fetch(PDO::FETCH_ASSOC)) {
+             // Check if room has any checklist items
+             $checkChecklists = $this->conn->prepare('SELECT checklist_id FROM tblroomchecklist WHERE checklist_room_id = ? LIMIT 1');
+             $checkChecklists->execute([$room_id]);
+             if ($checkChecklists->fetch(PDO::FETCH_ASSOC)) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Cannot delete room with existing assignments.'
+                     'message' => 'Cannot delete room with existing checklists.'
+                 ]);
+             }
+
+             // Check if room has any operation records
+             $checkOps = $this->conn->prepare('SELECT operation_id FROM tblassignedoperation WHERE operation_room_id = ? LIMIT 1');
+             $checkOps->execute([$room_id]);
+             if ($checkOps->fetch(PDO::FETCH_ASSOC)) {
+                 return json_encode([
+                     'success' => false,
+                     'message' => 'Cannot delete room with existing operation records.'
                  ]);
              }
 
@@ -960,6 +971,100 @@
              ]);
          }
      }
+
+    public function getRoomsByBuilding($data) {
+        try {
+            if (!is_array($data) || !isset($data['building_id'])) {
+                return json_encode([
+                    'success' => false,
+                    'message' => 'Missing required field: building_id'
+                ]);
+            }
+
+            $building_id = (int)$data['building_id'];
+            if ($building_id <= 0) {
+                return json_encode([
+                    'success' => false,
+                    'message' => 'Invalid building_id.'
+                ]);
+            }
+
+            // Get all rooms from all floors of this building, grouped by floor
+            $stmt = $this->conn->prepare('
+                SELECT 
+                    r.room_id, 
+                    r.room_number, 
+                    r.room_building_floor_id,
+                    bf.floorbuilding_id,
+                    f.floor_id,
+                    f.floor_name
+                FROM tblroom r
+                JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id
+                JOIN tblfloor f ON f.floor_id = bf.floor_id
+                WHERE bf.building_id = ?
+                ORDER BY f.floor_name ASC, r.room_number ASC
+            ');
+            $stmt->execute([$building_id]);
+            $rooms = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Group rooms by floor
+            $grouped = [];
+            foreach ($rooms as $room) {
+                $floorName = $room['floor_name'];
+                if (!isset($grouped[$floorName])) {
+                    $grouped[$floorName] = [];
+                }
+                $grouped[$floorName][] = [
+                    'room_id' => $room['room_id'],
+                    'room_number' => $room['room_number'],
+                    'floorbuilding_id' => $room['floorbuilding_id']
+                ];
+            }
+
+            return json_encode([
+                'success' => true,
+                'data' => $grouped
+            ]);
+        } catch (PDOException $e) {
+            return json_encode([
+                'success' => false,
+                'message' => 'Database error: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    public function getAssignedRooms($data) {
+        try {
+            if (!is_array($data) || !isset($data['assigned_id'])) {
+                return json_encode([
+                    'success' => false,
+                    'message' => 'Missing required field: assigned_id'
+                ]);
+            }
+
+            $assigned_id = (int)$data['assigned_id'];
+            if ($assigned_id <= 0) {
+                return json_encode([
+                    'success' => false,
+                    'message' => 'Invalid assigned_id.'
+                ]);
+            }
+
+            $stmt = $this->conn->prepare('SELECT ar.assigned_rooms_id, ar.assigned_room_id, r.room_number FROM tblassignedrooms ar JOIN tblroom r ON r.room_id = ar.assigned_room_id WHERE ar.assigned_assigned_id = ? ORDER BY r.room_number ASC');
+            $stmt->execute([$assigned_id]);
+            $rooms = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            return json_encode([
+                'success' => true,
+                'data' => $rooms
+            ]);
+        } catch (PDOException $e) {
+            return json_encode([
+                'success' => false,
+                'message' => 'Database error: ' . $e->getMessage()
+            ]);
+        }
+    }
 
     public function getFloorNames() {
         try {
@@ -1449,15 +1554,15 @@
 
      public function createAssigned($data) {
          try {
-             if (!is_array($data) || !isset($data['assigned_user_id'], $data['assigned_floor_building_id'], $data['assigned_start_date'], $data['assigned_end_date'], $data['assigned_by_user_id'])) {
+             if (!is_array($data) || !isset($data['assigned_user_id'], $data['assigned_start_date'], $data['assigned_end_date'], $data['assigned_by_user_id'])) {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Missing required fields: assigned_user_id, assigned_floor_building_id, assigned_start_date, assigned_end_date, assigned_by_user_id'
+                     'message' => 'Missing required fields: assigned_user_id, assigned_start_date, assigned_end_date, assigned_by_user_id'
                  ]);
              }
 
              $assigned_user_id = (int)$data['assigned_user_id'];
-             $assigned_floor_building_id = (int)$data['assigned_floor_building_id'];
+             $assigned_floor_building_id = isset($data['assigned_floor_building_id']) ? (int)$data['assigned_floor_building_id'] : 0;
              $assigned_by_user_id = (int)$data['assigned_by_user_id'];
              $assigned_start_date = trim((string)$data['assigned_start_date']);
              $assigned_end_date = trim((string)$data['assigned_end_date']);
@@ -1467,12 +1572,6 @@
                  return json_encode([
                      'success' => false,
                      'message' => 'Invalid assigned_user_id.'
-                 ]);
-             }
-             if ($assigned_floor_building_id <= 0) {
-                 return json_encode([
-                     'success' => false,
-                     'message' => 'Invalid assigned_floor_building_id.'
                  ]);
              }
              if ($assigned_by_user_id <= 0) {
@@ -1523,22 +1622,54 @@
                  ]);
              }
 
-             $checkFloor = $this->conn->prepare('SELECT floorbuilding_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
-             $checkFloor->execute([$assigned_floor_building_id]);
-             if (!$checkFloor->fetch(PDO::FETCH_ASSOC)) {
+             // If floor_building_id not provided but room_ids are, derive from first room
+             if ($assigned_floor_building_id <= 0 && isset($data['room_ids']) && is_array($data['room_ids']) && count($data['room_ids']) > 0) {
+                 $firstRoomId = (int)$data['room_ids'][0];
+                 $getFloorStmt = $this->conn->prepare('SELECT room_building_floor_id FROM tblroom WHERE room_id = ?');
+                 $getFloorStmt->execute([$firstRoomId]);
+                 $roomData = $getFloorStmt->fetch(PDO::FETCH_ASSOC);
+                 if ($roomData) {
+                     $assigned_floor_building_id = (int)$roomData['room_building_floor_id'];
+                 }
+             }
+
+             // Validate floor if provided or derived
+             if ($assigned_floor_building_id > 0) {
+                 $checkFloor = $this->conn->prepare('SELECT floorbuilding_id FROM tblbuildingfloor WHERE floorbuilding_id = ?');
+                 $checkFloor->execute([$assigned_floor_building_id]);
+                 if (!$checkFloor->fetch(PDO::FETCH_ASSOC)) {
+                     return json_encode([
+                         'success' => false,
+                         'message' => 'Building floor not found.'
+                     ]);
+                 }
+             } else {
                  return json_encode([
                      'success' => false,
-                     'message' => 'Building floor not found.'
+                     'message' => 'Please select a primary floor or at least one room.'
                  ]);
              }
 
              $stmt = $this->conn->prepare('INSERT INTO tblassigned (assigned_user_id, assigned_floor_building_id, assigned_start_date, assigned_end_date, assigned_status_enum, assigned_by_user_id, assigned_created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())');
              $stmt->execute([$assigned_user_id, $assigned_floor_building_id, $assigned_start_date, $assigned_end_date, $assigned_status_enum, $assigned_by_user_id]);
 
+             $assigned_id = $this->conn->lastInsertId();
+
+             // Insert room assignments if room_ids provided
+             if (isset($data['room_ids']) && is_array($data['room_ids']) && count($data['room_ids']) > 0) {
+                 $roomStmt = $this->conn->prepare('INSERT INTO tblassignedrooms (assigned_assigned_id, assigned_room_id, assigned_created_by, assigned_created_at) VALUES (?, ?, ?, NOW())');
+                 foreach ($data['room_ids'] as $room_id) {
+                     $rid = (int)$room_id;
+                     if ($rid > 0) {
+                         $roomStmt->execute([$assigned_id, $rid, $assigned_by_user_id]);
+                     }
+                 }
+             }
+
              return json_encode([
                  'success' => true,
                  'message' => 'Assignment created successfully',
-                 'assigned_id' => $this->conn->lastInsertId()
+                 'assigned_id' => $assigned_id
              ]);
          } catch (PDOException $e) {
              return json_encode([
@@ -1686,10 +1817,34 @@
              $stmt = $this->conn->prepare($sql);
              $stmt->execute($params);
 
-             return json_encode([
-                 'success' => true,
-                 'message' => 'Assignment updated successfully'
-             ]);
+            // Update room assignments if room_ids provided
+            if (isset($data['room_ids']) && is_array($data['room_ids'])) {
+                // Get current assignment to find assigned_by_user_id for new room entries
+                $getAssignedStmt = $this->conn->prepare('SELECT assigned_by_user_id FROM tblassigned WHERE assigned_id = ?');
+                $getAssignedStmt->execute([$assigned_id]);
+                $assignedData = $getAssignedStmt->fetch(PDO::FETCH_ASSOC);
+                $created_by = $assignedData ? $assignedData['assigned_by_user_id'] : 0;
+
+                // Delete existing room assignments
+                $deleteRooms = $this->conn->prepare('DELETE FROM tblassignedrooms WHERE assigned_assigned_id = ?');
+                $deleteRooms->execute([$assigned_id]);
+
+                // Insert new room assignments if any provided
+                if (count($data['room_ids']) > 0) {
+                    $roomStmt = $this->conn->prepare('INSERT INTO tblassignedrooms (assigned_assigned_id, assigned_room_id, assigned_created_by, assigned_created_at) VALUES (?, ?, ?, NOW())');
+                    foreach ($data['room_ids'] as $room_id) {
+                        $rid = (int)$room_id;
+                        if ($rid > 0) {
+                            $roomStmt->execute([$assigned_id, $rid, $created_by]);
+                        }
+                    }
+                }
+            }
+
+            return json_encode([
+                'success' => true,
+                'message' => 'Assignment updated successfully'
+            ]);
          } catch (PDOException $e) {
              return json_encode([
                  'success' => false,
@@ -1935,7 +2090,7 @@
                      o.operation_condition,
                      o.operation_updated_at
                  FROM tblroom r
-                 JOIN tblroomchecklist c ON c.checklist_floorbuilding_id = r.room_building_floor_id
+                 JOIN tblroomchecklist c ON c.checklist_room_id = r.room_id
                  LEFT JOIN (
                      SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at
                      FROM tblassignedoperation ao1
@@ -2089,9 +2244,15 @@
      case 'deleteBuilding':
          echo $user->deleteBuilding($json);
          break;
-     case 'getRooms':
-         echo $user->getRooms($json);
-         break;
+     case 'getRoomsByBuilding':
+        echo $user->getRoomsByBuilding($json);
+        break;
+    case 'getAssignedRooms':
+        echo $user->getAssignedRooms($json);
+        break;
+    case 'getRooms':
+        echo $user->getRooms($json);
+        break;
      case 'createRoom':
         echo $user->createRoom($json);
         break;
