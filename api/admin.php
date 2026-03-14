@@ -2043,27 +2043,27 @@
              $assigned_floor_building_id = (int)$assignment['assigned_floor_building_id'];
 
              $roomsStmt = $this->conn->prepare('
-                 SELECT
-                     r.room_id,
-                     r.room_number,
-                     b.building_name,
-                     f.floor_name,
-                     s.assigned_status_id,
-                     s.assigned_status,
-                     s.assigned_remarks,
-                     s.assigned_updated_at
-                 FROM tblroom r
-                 JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id
-                 JOIN tblbuilding b ON b.building_id = bf.building_id
-                 JOIN tblfloor f ON f.floor_id = bf.floor_id
-                 LEFT JOIN tblassignedstatus s
-                     ON s.room_id = r.room_id
-                     AND s.assigned_reported_by = ?
-                     AND s.completion_date = ?
-                 WHERE r.room_building_floor_id = ?
-                 ORDER BY r.room_number ASC
-             ');
-             $roomsStmt->execute([$user_id, $date, $assigned_floor_building_id]);
+                SELECT
+                    r.room_id,
+                    r.room_number,
+                    b.building_name,
+                    f.floor_name,
+                    s.assigned_status_id,
+                    s.assigned_status,
+                    s.assigned_remarks,
+                    s.assigned_updated_at
+                FROM tblroom r
+                JOIN tblbuildingfloor bf ON bf.floorbuilding_id = r.room_building_floor_id
+                JOIN tblbuilding b ON b.building_id = bf.building_id
+                JOIN tblfloor f ON f.floor_id = bf.floor_id
+                LEFT JOIN tblassignedstatus s
+                    ON s.room_id = r.room_id
+                    AND s.assigned_reported_by = ?
+                    AND s.completion_date >= ? AND s.completion_date < DATE_ADD(?, INTERVAL 1 DAY)
+                WHERE r.room_building_floor_id = ?
+                ORDER BY r.room_number ASC
+            ');
+            $roomsStmt->execute([$user_id, $date, $date, $assigned_floor_building_id]);
              $rooms = $roomsStmt->fetchAll(PDO::FETCH_ASSOC);
 
              if (count($rooms) === 0) {
@@ -2079,43 +2079,43 @@
              $placeholders = implode(',', array_fill(0, count($roomIds), '?'));
 
              $checklistStmt = $this->conn->prepare('
-                 SELECT
-                     r.room_id,
-                     c.checklist_id,
-                     c.checklist_name,
-                     c.checklist_type,
-                     c.checklist_quantity,
-                     o.operation_is_functional,
-                     o.operation_quantity,
-                     o.operation_condition,
-                     o.operation_updated_at
-                 FROM tblroom r
-                 JOIN tblroomchecklist c ON c.checklist_room_id = r.room_id
-                 LEFT JOIN (
-                     SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at
-                     FROM tblassignedoperation ao1
-                     INNER JOIN (
-                         SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at
-                         FROM tblassignedoperation
-                         WHERE operation_updated_by = ? AND DATE(operation_updated_at) = ?
-                         GROUP BY operation_room_id, operation_checklist_id
-                     ) ao2
-                         ON ao2.operation_room_id = ao1.operation_room_id
-                         AND ao2.operation_checklist_id = ao1.operation_checklist_id
-                         AND ao2.max_updated_at = ao1.operation_updated_at
-                     WHERE ao1.operation_updated_by = ? AND DATE(ao1.operation_updated_at) = ?
-                 ) o
-                     ON o.operation_room_id = r.room_id
-                     AND o.operation_checklist_id = c.checklist_id
-                 WHERE r.room_id IN (' . $placeholders . ')
-                 ORDER BY r.room_id ASC, c.checklist_name ASC
-             ');
+                SELECT
+                    r.room_id,
+                    c.checklist_id,
+                    c.checklist_name,
+                    c.checklist_type,
+                    c.checklist_quantity,
+                    o.operation_is_functional,
+                    o.operation_quantity,
+                    o.operation_condition,
+                    o.operation_updated_at
+                FROM tblroom r
+                JOIN tblroomchecklist c ON c.checklist_room_id = r.room_id
+                LEFT JOIN (
+                    SELECT ao1.operation_room_id, ao1.operation_checklist_id, ao1.operation_is_functional, ao1.operation_quantity, ao1.operation_condition, ao1.operation_updated_at
+                    FROM tblassignedoperation ao1
+                    INNER JOIN (
+                        SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at
+                        FROM tblassignedoperation
+                        WHERE operation_updated_by = ? AND operation_updated_at >= ? AND operation_updated_at < DATE_ADD(?, INTERVAL 1 DAY)
+                        GROUP BY operation_room_id, operation_checklist_id
+                    ) ao2
+                        ON ao2.operation_room_id = ao1.operation_room_id
+                        AND ao2.operation_checklist_id = ao1.operation_checklist_id
+                        AND ao2.max_updated_at = ao1.operation_updated_at
+                    WHERE ao1.operation_updated_by = ? AND ao1.operation_updated_at >= ? AND ao1.operation_updated_at < DATE_ADD(?, INTERVAL 1 DAY)
+                ) o
+                    ON o.operation_room_id = r.room_id
+                    AND o.operation_checklist_id = c.checklist_id
+                WHERE r.room_id IN (' . $placeholders . ')
+                ORDER BY r.room_id ASC, c.checklist_name ASC
+            ');
 
-             $params = [$user_id, $date, $user_id, $date];
-             foreach ($roomIds as $rid) {
-                 $params[] = $rid;
-             }
-             $checklistStmt->execute($params);
+            $params = [$user_id, $date, $date, $user_id, $date, $date];
+            foreach ($roomIds as $rid) {
+                $params[] = $rid;
+            }
+            $checklistStmt->execute($params);
              $checklistRows = $checklistStmt->fetchAll(PDO::FETCH_ASSOC);
 
              $byRoom = [];

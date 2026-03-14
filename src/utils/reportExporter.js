@@ -74,14 +74,6 @@ export const generateInspectionReport = (reportData, filters = {}, options = {})
   const doc = new jsPDF({ orientation: 'portrait' });
 
   const inspections = Array.isArray(reportData?.inspections) ? reportData.inspections : [];
-  const checklistNames = Array.from(
-    new Set(
-      inspections
-        .flatMap((i) => (Array.isArray(i.checklist) ? i.checklist : []))
-        .map((c) => String(c.checklist_name || '').trim())
-        .filter(Boolean)
-    )
-  ).sort((a, b) => a.localeCompare(b));
 
   // Header
   doc.setFontSize(18);
@@ -140,18 +132,7 @@ export const generateInspectionReport = (reportData, filters = {}, options = {})
     return { text: 'Pending', color: [100, 100, 100] };
   };
 
-  const conditionColors = {
-    excellent: { fill: [16, 185, 129], text: [255, 255, 255] },
-    good: { fill: [59, 130, 246], text: [255, 255, 255] },
-    fair: { fill: [245, 158, 11], text: [255, 255, 255] },
-    poor: { fill: [239, 68, 68], text: [255, 255, 255] },
-  };
 
-  const statusTextColors = {
-    'OK': [4, 120, 87],
-    'Not OK': [190, 18, 60],
-    'Pending': [100, 100, 100],
-  };
 
   let currentY = 90;
   const pageHeight = 280;

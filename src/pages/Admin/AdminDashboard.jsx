@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import axios from 'axios';
 import { SecureStorage } from '../../utils/encryption';
@@ -202,7 +202,7 @@ export default function AdminDashboard() {
     return (a + b).toUpperCase();
   };
 
-  const loadCounts = async () => {
+  const loadCounts = useCallback(async () => {
     setLoading(true);
     try {
       const [studentsRes, buildingsRes, roomsRes] = await Promise.all([
@@ -219,9 +219,9 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [baseUrl]);
 
-  const loadTodayActivity = async () => {
+  const loadTodayActivity = useCallback(async () => {
     setTodayActivityLoading(true);
     try {
       const res = await axios.post(
@@ -242,9 +242,9 @@ export default function AdminDashboard() {
     } finally {
       setTodayActivityLoading(false);
     }
-  };
+  }, [baseUrl, todayYmd]);
 
-  const loadRecentInspections = async () => {
+  const loadRecentInspections = useCallback(async () => {
     setRecentInspectionsLoading(true);
     try {
       const res = await axios.post(
@@ -265,14 +265,13 @@ export default function AdminDashboard() {
     } finally {
       setRecentInspectionsLoading(false);
     }
-  };
+  }, [baseUrl]);
 
   useEffect(() => {
     loadCounts();
     loadTodayActivity();
     loadRecentInspections();
-    
-  }, []);
+  }, [loadCounts, loadTodayActivity, loadRecentInspections]);
 
   const activeToday = useMemo(() => (todayActivity || []).filter((r) => !!r.is_active_on_date).length, [todayActivity]);
   const roomsInspectedToday = useMemo(() => (todayActivity || []).reduce((s, r) => s + (Number(r.rooms_inspected) || 0), 0), [todayActivity]);

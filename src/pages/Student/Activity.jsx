@@ -142,7 +142,6 @@ export default function Activity() {
     loadData();
   }, [userId, baseUrl]);
 
-  const today = new Date();
   const todayYmdNow = useMemo(() => ymd(new Date()), []);
   const todayYmd = useMemo(() => ymd(new Date()), []);
 
@@ -159,6 +158,7 @@ export default function Activity() {
   const assignmentProgress = useMemo(() => {
     if (!selectedAssignment) return null;
     
+    const today = new Date();
     const startDate = new Date(selectedAssignment.assigned_start_date);
     const endDate = new Date(selectedAssignment.assigned_end_date);
     const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
@@ -191,7 +191,7 @@ export default function Activity() {
       startDate,
       endDate
     };
-  }, [selectedAssignment, history, today]);
+  }, [selectedAssignment, history]);
 
   const fmtDate = (val) => {
     if (!val) return '';
@@ -358,35 +358,6 @@ export default function Activity() {
     setExpandedChecklist(null);
   };
 
-  const stats = useMemo(() => {
-    const total = history.reduce((sum, h) => sum + (Number(h.count) || 0), 0);
-    const activeDays = history.filter((h) => (Number(h.count) || 0) > 0).length;
-    const avgPerDay = activeDays > 0 ? total / activeDays : 0;
-    const bestDayCount = history.reduce((m, h) => Math.max(m, Number(h.count) || 0), 0);
-    
-    // Calculate streak
-    let currentStreak = 0;
-    const checkDate = new Date();
-    checkDate.setHours(0, 0, 0, 0);
-    while (true) {
-      const checkStr = ymd(checkDate);
-      const cnt = historyMap.get(checkStr) || 0;
-      if (cnt > 0) {
-        currentStreak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-        continue;
-      }
-      break;
-    }
-
-    return {
-      total,
-      activeDays,
-      avgPerDay,
-      bestDayCount,
-      currentStreak
-    };
-  }, [history, historyMap]);
 
   // Get status badge styles
   const getStatusBadge = (status, hasUpdate, isPastDate) => {

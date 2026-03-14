@@ -183,12 +183,12 @@
                 LEFT JOIN tblassignedstatus s
                     ON s.room_id = r.room_id
                     AND s.assigned_reported_by = ?
-                    AND s.completion_date = ?
+                    AND s.completion_date >= ? AND s.completion_date < DATE_ADD(?, INTERVAL 1 DAY)
                 WHERE r.room_building_floor_id = ?
                   AND s.assigned_status_id IS NULL
                 ORDER BY r.room_number ASC
             ');
-            $missedStmt->execute([$assigned_user_id, $date, $assigned_floor_building_id]);
+            $missedStmt->execute([$assigned_user_id, $date, $date, $assigned_floor_building_id]);
             $rooms = $missedStmt->fetchAll(PDO::FETCH_ASSOC);
 
             if (count($rooms) === 0) {
@@ -222,13 +222,13 @@
                     INNER JOIN (
                         SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at
                         FROM tblassignedoperation
-                        WHERE operation_updated_by = ? AND DATE(operation_updated_at) = ?
+                        WHERE operation_updated_by = ? AND operation_updated_at >= ? AND operation_updated_at < DATE_ADD(?, INTERVAL 1 DAY)
                         GROUP BY operation_room_id, operation_checklist_id
                     ) ao2
                         ON ao2.operation_room_id = ao1.operation_room_id
                         AND ao2.operation_checklist_id = ao1.operation_checklist_id
                         AND ao2.max_updated_at = ao1.operation_updated_at
-                    WHERE ao1.operation_updated_by = ? AND DATE(ao1.operation_updated_at) = ?
+                    WHERE ao1.operation_updated_by = ? AND ao1.operation_updated_at >= ? AND ao1.operation_updated_at < DATE_ADD(?, INTERVAL 1 DAY)
                 ) o
                     ON o.operation_room_id = r.room_id
                     AND o.operation_checklist_id = c.checklist_id
@@ -236,7 +236,7 @@
                 ORDER BY r.room_id ASC, c.checklist_name ASC
             ');
 
-            $params = [$assigned_user_id, $date, $assigned_user_id, $date];
+            $params = [$assigned_user_id, $date, $date, $assigned_user_id, $date, $date];
             foreach ($roomIds as $rid) {
                 $params[] = $rid;
             }
@@ -341,11 +341,11 @@
                 LEFT JOIN tblassignedstatus s
                     ON s.room_id = r.room_id
                     AND s.assigned_reported_by = ?
-                    AND s.completion_date = ?
+                    AND s.completion_date >= ? AND s.completion_date < DATE_ADD(?, INTERVAL 1 DAY)
                 WHERE r.room_building_floor_id = ?
                 ORDER BY r.room_number ASC
             ');
-            $roomsStmt->execute([$user_id, $date, $assigned_floor_building_id]);
+            $roomsStmt->execute([$user_id, $date, $date, $assigned_floor_building_id]);
             $rooms = $roomsStmt->fetchAll(PDO::FETCH_ASSOC);
 
             if (count($rooms) === 0) {
@@ -379,13 +379,13 @@
                     INNER JOIN (
                         SELECT operation_room_id, operation_checklist_id, MAX(operation_updated_at) AS max_updated_at
                         FROM tblassignedoperation
-                        WHERE operation_updated_by = ? AND DATE(operation_updated_at) = ?
+                        WHERE operation_updated_by = ? AND operation_updated_at >= ? AND operation_updated_at < DATE_ADD(?, INTERVAL 1 DAY)
                         GROUP BY operation_room_id, operation_checklist_id
                     ) ao2
                         ON ao2.operation_room_id = ao1.operation_room_id
                         AND ao2.operation_checklist_id = ao1.operation_checklist_id
                         AND ao2.max_updated_at = ao1.operation_updated_at
-                    WHERE ao1.operation_updated_by = ? AND DATE(ao1.operation_updated_at) = ?
+                    WHERE ao1.operation_updated_by = ? AND ao1.operation_updated_at >= ? AND ao1.operation_updated_at < DATE_ADD(?, INTERVAL 1 DAY)
                 ) o
                     ON o.operation_room_id = r.room_id
                     AND o.operation_checklist_id = c.checklist_id
@@ -393,7 +393,7 @@
                 ORDER BY r.room_id ASC, c.checklist_name ASC
             ');
 
-            $params = [$user_id, $date, $user_id, $date];
+            $params = [$user_id, $date, $date, $user_id, $date, $date];
             foreach ($roomIds as $rid) {
                 $params[] = $rid;
             }
@@ -900,7 +900,7 @@
             }
 
             // Insert operation with appropriate column based on checklist type
-            $insOperation = $this->conn->prepare('INSERT INTO tblassignedoperation (operation_is_functional, operation_quantity, operation_condition, operation_updated_at, operation_updated_by, operation_room_id, operation_checklist_id) VALUES (?, ?, ?, NOW(), ?, ?, ?)');
+            $insOperation = $this->conn->prepare('INSERT INTO tblassignedoperation (operation_assigned_id, operation_is_functional, operation_quantity, operation_condition, operation_updated_at, operation_updated_by, operation_room_id, operation_checklist_id) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?)');
 
             foreach ($operations as $op) {
                 $checklist_id = (int)($op['checklist_id'] ?? 0);
@@ -908,7 +908,6 @@
                 if ($checklist_id <= 0 || $status === null || $status === '') {
                     continue;
                 }
-                
                 $itemType = $checklistTypes[$checklist_id]['type'] ?? 'boolean';
                 $expectedQty = $checklistTypes[$checklist_id]['quantity'] ?? null;
                 
@@ -943,7 +942,7 @@
                     }
                 }
                 
-                $insOperation->execute([$isFunctional, $quantity, $condition, $reported_by, $room_id, $checklist_id]);
+                $insOperation->execute([$assigned_id, $isFunctional, $quantity, $condition, $reported_by, $room_id, $checklist_id]);
             }
 
             $this->conn->commit();

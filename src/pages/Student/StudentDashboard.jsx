@@ -34,12 +34,6 @@ export default function StudentDashboard() {
     return `${y}-${m}-${day}`;
   }, []);
 
-  const selectedAssignment = useMemo(() => {
-    const id = Number(selectedAssignmentId);
-    if (!id) return null;
-    return assignments.find((a) => Number(a.assigned_id) === id) || null;
-  }, [assignments, selectedAssignmentId]);
-
   const loadDashboard = useCallback(async () => {
     if (!assignedUserId) {
       setRooms([]);
